@@ -36,9 +36,16 @@
       }
     }
 
-    // aliens list
+    // aliens list - can be managed client-side OR server-side
     let aliens = [];
     let aliensTimer = null;
+    let useServerAliens = false; // Flag to disable client-side alien movement
+    
+    // other players list (from server)
+    let otherPlayers = [];
+    
+    // Flag to use server boxes instead of client-generated
+    let useServerBoxes = false;
     // when a map is loaded or regenerated we populate boxes[] with contents
     function populateBoxes(){
       boxes.length = 0;
@@ -125,11 +132,16 @@
       // must be a wall
       if (map[y][x] !== TILE_WALL) return false;
       if (playerState.bombs <= 0) return false;
+      
+      // Send bomb placement to server
+      onAction({ action: 'placeBomb', x, y });
+      
+      // Optimistically add bomb locally (server will validate and sync)
       playerState.bombs -= 1;
       const bomb = { x, y, blinkOn: false, delay: 800, minDelay: 80, stopped: false };
       bombs.push(bomb);
 
-      // recursive blink & accelerate
+      // recursive blink & accelerate (client-side visual only, server handles explosion)
       function tick(){
         if (bomb.stopped) return;
         bomb.blinkOn = !bomb.blinkOn;
@@ -137,9 +149,9 @@
         bomb.delay = Math.max(bomb.minDelay, Math.floor(bomb.delay * 0.75));
         // schedule next or explode if delay at min
         if (bomb.delay <= bomb.minDelay) {
-          // final short blinks then explode
+          // final short blinks then explode (server will send mapChange)
           setTimeout(() => {
-            // remove wall
+            // remove wall (optimistic, server will confirm)
             map[bomb.y][bomb.x] = TILE_FLOOR;
             // remove bomb from list
             const idx = bombs.indexOf(bomb);
@@ -165,7 +177,9 @@
         const pushX = nx+dx, pushY = ny+dy;
         if (pushX < 0 || pushY < 0 || pushX >= width || pushY >= height) return false;
         if (map[pushY][pushX] !== TILE_FLOOR) return false;
-        // perform push
+        // Send push action to server (server will validate and apply)
+        onAction({ action: 'push', fromX: nx, fromY: ny, toX: pushX, toY: pushY });
+        // Optimistically apply locally (server will correct if invalid)
         map[ny][nx] = TILE_FLOOR;
         map[pushY][pushX] = TILE_PUSH;
         return true;
@@ -181,11 +195,47 @@
 
     function render(){
       let out='';
+      // Create sets for quick lookup
+      const alienPositions = new Set();
+      aliens.forEach(a => {
+        if (a && a.x !== undefined && a.y !== undefined) {
+          alienPositions.add(`${a.x},${a.y}`);
+        }
+      });
+      
+      // Create map of other player positions with their colors
+      const otherPlayerMap = new Map();
+      otherPlayers.forEach(p => {
+        if (p && p.x !== undefined && p.y !== undefined) {
+          otherPlayerMap.set(`${p.x},${p.y}`, p);
+        }
+      });
+      
       for (let y=0;y<height;y++){
         for (let x=0;x<width;x++){
           let ch = map[y][x];
           let classes=['tile'];
-          if (x===player.x && y===player.y){ ch = TILE_PLAYER; classes.push('player'); }
+          let style = '';
+          
+          // Check for other players first (they render on top of floor)
+          const otherPlayerAtPos = otherPlayerMap.get(`${x},${y}`);
+          if (otherPlayerAtPos) {
+            ch = TILE_PLAYER;
+            classes.push('other-player');
+            if (otherPlayerAtPos.color) {
+              style = `color: ${otherPlayerAtPos.color};`;
+            }
+          }
+          // Then check for local player
+          else if (x===player.x && y===player.y){ 
+            ch = TILE_PLAYER; 
+            classes.push('player'); 
+          }
+          // Then check for aliens
+          else if (alienPositions.has(`${x},${y}`)){ 
+            ch = '&'; 
+            classes.push('alien'); 
+          }
           else if (ch === TILE_FLOOR){ ch = ' '; }
           else if (ch === TILE_PUMP){ classes.push('pump'); }
           else if (ch === (mapOpts.boxSymbol || 'Ø')) {
@@ -193,7 +243,12 @@
             if (box && box.content) classes.push('box-filled'); else classes.push('box-empty');
           }
           else if (ch === (mapOpts.bombSymbol || 'B')) { classes.push('map-bomb'); }
-          else if (ch === '&'){ classes.push('alien'); }
+          else if (ch === '&'){ 
+            // Only show as alien if not already handled by alienPositions
+            if (!alienPositions.has(`${x},${y}`)) {
+              classes.push('alien'); 
+            }
+          }
           else if (ch === (mapOpts.dropletSymbol || '•')){ classes.push('droplet'); }
           // check bombs to color the wall if attached
           const b = findBombAt(x,y);
@@ -202,28 +257,25 @@
             if (b.blinkOn) classes.push('bomb-on');
           }
           const disp = (ch === ' ') ? '&nbsp;' : escapeHtml(ch);
-          out += `<span class="${classes.join(' ')}">${disp}</span>`;
+          const styleAttr = style ? ` style="${style}"` : '';
+          out += `<span class="${classes.join(' ')}"${styleAttr}>${disp}</span>`;
         }
         out += '<br/>';
       }
       screenEl.innerHTML = out;
-      stateMenuEl.textContent = `jumps: ${playerState.jumps}  bombs: ${playerState.bombs}  dash: ${playerState.dash ? 'yes':'no'}  oxygen: ${playerState.oxygen}/${maxOxygen}`;
+      stateMenuEl.textContent = `bombs: ${playerState.bombs}  dash: ${playerState.dash ? 'yes':'no'}  oxygen: ${playerState.oxygen}/${maxOxygen}`;
     }
 
     // input handling
     const keyMap = {'ArrowUp':[0,-1],'ArrowDown':[0,1],'ArrowLeft':[-1,0],'ArrowRight':[1,0],'w':[0,-1],'s':[0,1],'a':[-1,0],'d':[1,0]};
     let lastDir = null;
     let keyHandler = (e) => {
-      const k = e.key;
-      // SPACE + direction jump
-      if (k === ' ' && lastDir && playerState.jumps > 0){
-        const [dx,dy] = lastDir;
-        const jx = player.x + dx*2, jy = player.y + dy*2;
-        if (canWalk(jx,jy,dx,dy)){
-          player.x = jx; player.y = jy; render();
-        }
+      // Don't process game input if chat is open
+      if (window.gameClient && window.gameClient.chatOpen) {
         return;
       }
+      
+      const k = e.key;
       // place bomb with 'x' using last direction
       if (k === 'x'){
         e.preventDefault();
@@ -243,42 +295,12 @@
       const nx = player.x + dx, ny = player.y + dy;
 
       if (canWalk(nx,ny,dx,dy)){
+        // Update local position immediately for responsive feel
+        player.x = nx;
+        player.y = ny;
+        // Send move to server for authoritative sync
+        // Server will handle collection automatically when player moves onto items
         onSendMove(nx, ny);
-        // replaced the old way of moving: player.x = nx; player.y = ny;
-        // pickup pump
-        if (map[player.y][player.x] === TILE_PUMP){
-          const gained = (mapOpts && mapOpts.pumpValue) ? mapOpts.pumpValue : PUMP_VALUE_DEFAULT;
-          playerState.oxygen = Math.min(maxOxygen, playerState.oxygen + gained);
-          map[player.y][player.x] = TILE_FLOOR;
-        }
-        // pickup droplet from dead alien (treat like a pump)
-        else if (map[player.y][player.x] === TILE_DROPLET){
-          const gained = (mapOpts && mapOpts.pumpValue) ? mapOpts.pumpValue : PUMP_VALUE_DEFAULT;
-          playerState.oxygen = Math.min(maxOxygen, playerState.oxygen + gained);
-          map[player.y][player.x] = TILE_FLOOR;
-        }
-        // open box and collect its single content
-        else if (map[player.y][player.x] === (mapOpts.boxSymbol || 'Ø')){
-          const box = findBoxAt(player.x, player.y);
-          if (box){
-            if (box.content === 'bomb'){
-              playerState.bombs = (playerState.bombs || 0) + 1;
-            } else if (box.content === 'oxygen'){
-              const gained = (mapOpts && mapOpts.pumpValue) ? mapOpts.pumpValue : PUMP_VALUE_DEFAULT;
-              playerState.oxygen = Math.min(maxOxygen, playerState.oxygen + gained);
-            }
-            // remove box from map and from boxes list
-            map[player.y][player.x] = TILE_FLOOR;
-            const idx = boxes.indexOf(box);
-            if (idx !== -1) boxes.splice(idx,1);
-          }
-        }
-        // pickup map-placed bombs (increment player's bomb count)
-        if (map[player.y][player.x] === (mapOpts.bombSymbol || 'B')){
-          playerState.bombs = (playerState.bombs || 0) + 1;
-          // remove the bomb from the map
-          map[player.y][player.x] = TILE_FLOOR;
-        }
         render();
         if (isExit(player.x, player.y)){
           if (typeof playExitAnimation === 'function'){
@@ -293,8 +315,10 @@
                 // clear aliens and respawn
                 aliens = [];
                 spawnAliens(3);
-                // populate boxes on the new map
-                populateBoxes();
+                // populate boxes on the new map - only if not using server boxes
+                if (!useServerBoxes) {
+                  populateBoxes();
+                }
               // place player at first floor tile
               outer2: for (let yy=0; yy<height; yy++){
                 for (let xx=0; xx<width; xx++){
@@ -313,8 +337,10 @@
             // clear aliens and respawn
             aliens = [];
             spawnAliens(3);
-            // populate boxes on the new map
-            populateBoxes();
+            // populate boxes on the new map - only if not using server boxes
+            if (!useServerBoxes) {
+              populateBoxes();
+            }
           }
         }
       }
@@ -331,18 +357,130 @@
     function start(){
       if (started) return;
       started = true;
-      // initial aliens
-      spawnAliens(mapOpts.alienCount || 3);
-      // populate boxes after initial map load
-      populateBoxes();
-      // start alien movement timer
-      aliensTimer = setInterval(stepAliens, mapOpts.alienTickMs || 700);
+      // initial aliens - only spawn if not using server aliens
+      if (!useServerAliens) {
+        spawnAliens(mapOpts.alienCount || 3);
+        // start alien movement timer
+        aliensTimer = setInterval(stepAliens, mapOpts.alienTickMs || 700);
+      }
+      // populate boxes after initial map load - only if not using server boxes
+      if (!useServerBoxes) {
+        populateBoxes();
+      }
       render();
       window.addEventListener('keydown', keyHandler);
     }
     function stop(){ if (!started) return; started=false; window.removeEventListener('keydown', keyHandler); if (aliensTimer) { clearInterval(aliensTimer); aliensTimer = null; } }
 
-    return { start, stop, getState, render, spawnAliens };
+    // Allow external code to update player position (for server sync)
+    function setPlayerPosition(x, y) {
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        player.x = x;
+        player.y = y;
+        render();
+      }
+    }
+
+    // Update player position from server (with validation)
+    function updatePlayerPosition(x, y) {
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        // Only update if significantly different to avoid jitter
+        if (Math.abs(player.x - x) > 0 || Math.abs(player.y - y) > 0) {
+          player.x = x;
+          player.y = y;
+          render();
+        }
+      }
+    }
+
+    // Update aliens from server (authoritative)
+    function updateAliens(serverAliens) {
+      useServerAliens = true;
+      // Stop client-side alien movement if running
+      if (aliensTimer) {
+        clearInterval(aliensTimer);
+        aliensTimer = null;
+      }
+      // Update aliens array with server data
+      aliens = serverAliens.map(a => ({ x: a.x, y: a.y }));
+      render();
+    }
+
+    // Update other players from server
+    function updateOtherPlayers(players) {
+      otherPlayers = players || [];
+      render();
+    }
+
+    // Apply map changes from server (authoritative)
+    function applyMapChanges(changes) {
+      changes.forEach(change => {
+        if (change.x >= 0 && change.x < width && change.y >= 0 && change.y < height) {
+          if (map[change.y]) {
+            map[change.y][change.x] = change.tile;
+          }
+        }
+      });
+      render();
+    }
+
+    // Update boxes from server (authoritative)
+    function updateBoxes(serverBoxes) {
+      useServerBoxes = true;
+      boxes.length = 0;
+      serverBoxes.forEach(b => {
+        boxes.push({ x: b.x, y: b.y, content: b.content });
+      });
+      render();
+    }
+
+    // Update bombs from server (authoritative)
+    function updateBombs(serverBombs) {
+      // Clear client-side bombs that aren't on server
+      const serverBombPositions = new Set(serverBombs.map(b => `${b.x},${b.y}`));
+      for (let i = bombs.length - 1; i >= 0; i--) {
+        const posKey = `${bombs[i].x},${bombs[i].y}`;
+        if (!serverBombPositions.has(posKey)) {
+          bombs[i].stopped = true;
+          bombs.splice(i, 1);
+        }
+      }
+      // Update existing bombs or add new ones
+      serverBombs.forEach(sb => {
+        let bomb = findBombAt(sb.x, sb.y);
+        if (!bomb) {
+          bomb = { x: sb.x, y: sb.y, blinkOn: false, delay: 800, minDelay: 80, stopped: false };
+          bombs.push(bomb);
+        }
+        bomb.blinkOn = sb.blinkOn;
+      });
+      render();
+    }
+
+    // Update single bomb state
+    function updateBomb(bombData) {
+      const bomb = findBombAt(bombData.x, bombData.y);
+      if (bomb) {
+        bomb.blinkOn = bombData.blinkOn;
+        render();
+      }
+    }
+
+    // Update player inventory from server
+    function updateInventory(inv) {
+      if (inv.bombs !== undefined) playerState.bombs = inv.bombs;
+      if (inv.oxygen !== undefined) playerState.oxygen = inv.oxygen;
+      if (inv.jumps !== undefined) playerState.jumps = inv.jumps;
+      if (inv.dash !== undefined) playerState.dash = inv.dash;
+      render();
+    }
+
+    return { 
+      start, stop, getState, render, spawnAliens, 
+      setPlayerPosition, updatePlayerPosition, 
+      updateAliens, updateOtherPlayers, 
+      applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory 
+    };
   }
 
   window.createGame = createGame;

@@ -17,7 +17,107 @@
       background:#070707;color:#ffffff;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
       -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
     }
-    #container{display:flex;gap:24px;max-width:90vw;max-height:90vh;padding:16px}
+    #container{
+      display:flex;
+      flex-direction:row;
+      align-items:flex-start;
+      gap:16px;
+      max-width:95vw;
+      max-height:90vh;
+      padding:16px;
+    }
+    #game-area{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:8px;
+    }
+    #sidebar{
+      width:220px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      flex-shrink:0;
+    }
+    #chat-container{
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:6px;
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      height:400px;
+      max-height:400px;
+    }
+    #chat-title{
+      font-size:11px;
+      font-weight:bold;
+      color:#aab3c2;
+      margin-bottom:6px;
+      padding-bottom:4px;
+      border-bottom:1px solid rgba(255,255,255,0.1);
+    }
+    #chat-messages{
+      flex:1;
+      overflow-y:auto;
+      font-size:11px;
+      line-height:1.4;
+      color:#e8eef6;
+      margin-bottom:8px;
+      padding-right:4px;
+    }
+    #chat-messages::-webkit-scrollbar{
+      width:4px;
+    }
+    #chat-messages::-webkit-scrollbar-track{
+      background:rgba(255,255,255,0.05);
+      border-radius:2px;
+    }
+    #chat-messages::-webkit-scrollbar-thumb{
+      background:rgba(255,255,255,0.2);
+      border-radius:2px;
+    }
+    .chat-message{
+      margin-bottom:4px;
+      word-wrap:break-word;
+    }
+    .chat-message.system{
+      color:#7b8596;
+      font-style:italic;
+    }
+    .chat-message .player-name{
+      color:#4fc3ff;
+      font-weight:bold;
+    }
+    #chat-input-container{
+      display:none;
+      border-top:1px solid rgba(255,255,255,0.1);
+      padding-top:6px;
+    }
+    #chat-input-container.active{
+      display:block;
+    }
+    #chat-input{
+      width:100%;
+      background:rgba(255,255,255,0.05);
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:4px;
+      padding:6px 8px;
+      color:#e8eef6;
+      font-size:11px;
+      font-family:inherit;
+      outline:none;
+    }
+    #chat-input:focus{
+      border-color:rgba(79,195,255,0.5);
+      background:rgba(255,255,255,0.08);
+    }
+    #chat-hint{
+      font-size:10px;
+      color:#7b8596;
+      margin-top:4px;
+      text-align:center;
+    }
     pre#screen{
       background:transparent;border-radius:8px;padding:12px;margin:0;
       /* larger font for better readability */
@@ -35,101 +135,56 @@
     .bomb-on{ color:#ff6666; font-weight:bold; }
     .bomb{ transition: color 0.1s linear; }
     .alien{ color:#ff66b2; }
-    #hud{margin-top:8px;color:#aab3c2;font-size:13px}
+    #stateMenu{
+      color:#e8eef6;
+      font-size:12px;
+      line-height:1.4;
+      margin:0;
+      padding:6px 12px;
+      background:rgba(255,255,255,0.05);
+      border-radius:4px;
+      border:1px solid rgba(255,255,255,0.08);
+      white-space:pre-wrap;
+      min-width:200px;
+      text-align:center;
+    }
+    #hud{
+      margin-top:4px;
+      color:#aab3c2;
+      font-size:11px;
+      text-align:center;
+    }
     .muted{color:#7b8596}
   </style>
 </head>
 <body>
   <div id="container">
-    <div id="sidebar" style="min-width:140px;color:#e8eef6;font-size:14px;line-height:1.3;">
-      <h3 style="margin:0 0 8px 0;font-size:15px;">STATE</h3>
-      <pre id="stateMenu" style="margin:0;white-space:pre-wrap;"></pre>
+    <div id="game-area">
+      <pre id="screen" aria-label="ASCII game screen" tabindex="0"></pre>
+      <pre id="stateMenu"></pre>
+      <div id="hud">
+        <span>Use <strong>arrow keys</strong> or <strong>WASD</strong> to move. </span>
+        <span class="muted">(Walls: #  • Floor: (space)  • You: @  • Pushable: o  • Pump: *  • Map Bomb: B  • Box: Ø)</span>
+      </div>
     </div>
-    <pre id="screen" aria-label="ASCII game screen" tabindex="0"></pre>
-    <div id="hud">
-      <span>Use <strong>arrow keys</strong> or <strong>WASD</strong> to move. </span>
-      <span class="muted">(Walls: #  • Floor: (space)  • You: @  • Pushable: o  • Pump: *  • Map Bomb: B  • Box: Ø)</span>
+    <div id="sidebar">
+      <div id="chat-container">
+        <div id="chat-title">CHAT</div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+          <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" />
+        </div>
+        <div id="chat-hint">Press <strong>C</strong> to chat</div>
+      </div>
     </div>
   </div>
   <script src="mapgen.js"></script>
   <script src="ui.js"></script>
   <script src="game.js"></script>
   <script src="client.js"></script>
-  <script>
-    const gameClient = new GameClient();
-
-    // In your game loop or input handlers
-    function handleInput() {
-      // Send your player's position to server
-      gameClient.sendMove(playerX, playerY);
-    }
-
-    // In your render loop
-    function render() {
-      // Render your player
-      renderPlayer(gameClient.getMyPlayer());
-      
-      // Render other players
-      gameClient.getOtherPlayers().forEach(player => {
-        renderPlayer(player);
-      });
-    }
-  </script>
-  <script>
-    // Simple ASCII frontend client
-    // Map generation delegated to external `mapgen.js` (window.generateMap)
-    // Set desired size: columns x rows
-    const initialCols = 40;
-    const initialRows = 20;
-    let width = initialCols;
-    let height = initialRows;
-    // Tile symbol constants (CAPS for easy refactor)
-    const TILE_WALL = '#';
-    const TILE_FLOOR = '.';
-    const TILE_PLAYER = '@';
-    const TILE_PUSH = 'o';
-    const TILE_PUMP = '*';
-
-    const PUMP_VALUE_DEFAULT = 25;
-
-    // map generation options (use constants where appropriate)
-    const mapOpts = {
-      pumpCount: 5,
-      pumpSymbol: TILE_PUMP,
-      pumpValue: PUMP_VALUE_DEFAULT,
-      // generator probabilities can be adjusted here if desired
-      wallProb: 0.08,
-      pushableProb: 0.06
-    };
-
-    // generate initial map
-    let map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : [];
-
-    // Player start (find first floor tile from top-left)
-    let player = {x: 1, y: 1};
-    outer: for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (map[y][x] === TILE_FLOOR) { player.x = x; player.y = y; break outer; }
-      }
-    }
-
-    const screenEl = document.getElementById('screen');
-
-    const playerState = { jumps: 1, bombs: 0, dash: false, oxygen: 50 };
-    const maxOxygen = 100;
-
-    // Use the extracted game module to manage input, rendering and state
-    const game = createGame({
-      map, width, height, screenEl,
-      stateMenuEl: document.getElementById('stateMenu'),
-      mapOpts, TILE_WALL, TILE_FLOOR, TILE_PLAYER, TILE_PUSH, TILE_PUMP,
-      PUMP_VALUE_DEFAULT, playExitAnimation: (typeof playExitAnimation !== 'undefined') ? playExitAnimation : undefined,
-      generateMap: (typeof generateMap !== 'undefined') ? generateMap : undefined
-    });
-
-    // spawn a few aliens and start the game loop
-    game.start();
-    screenEl.focus();
-  </script>
+  <!-- 
+    Note: The game is now initialized by client.js when it receives the 'init' message from the server.
+    The client.js script at the bottom will create the GameClient and join a room automatically.
+  -->
 </body>
 </html>
