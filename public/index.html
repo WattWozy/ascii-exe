@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" 
+      content="default-src 'self'; 
+               connect-src 'self' ws://localhost:* ws://*:3000; 
+               script-src 'self' 'unsafe-inline'; 
+               style-src 'self' 'unsafe-inline';">
+  <title>ASCII Miner — Client</title>
+  <style>
+    :root{background:#070707}
+    html,body{height:100%;margin:0}
+    body{
+      display:flex;align-items:center;justify-content:center;
+      background:#070707;color:#ffffff;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    }
+    #container{display:flex;gap:24px;max-width:90vw;max-height:90vh;padding:16px}
+    pre#screen{
+      background:transparent;border-radius:8px;padding:12px;margin:0;
+      /* larger font for better readability */
+      font-size:22px;line-height:1.25;white-space:pre;overflow:auto;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+      border:1px solid rgba(255,255,255,0.04);
+      color:#e8eef6;
+    }
+    /* per-tile inline cells so we can style individual symbols (pumps in blue, aliens in pink) */
+    .tile{ display:inline-block; width:1.4ch; text-align:center; vertical-align:top; font-size:1em; padding:0 0.05ch; }
+    .pump{ color:#4fc3ff; }
+    .box{ color:#7cd67c; font-weight:700; }
+    .map-bomb{ color:#ffeb3b; font-weight:700; }
+    .droplet{ color:#7fe0ff; }
+    .bomb-on{ color:#ff6666; font-weight:bold; }
+    .bomb{ transition: color 0.1s linear; }
+    .alien{ color:#ff66b2; }
+    #hud{margin-top:8px;color:#aab3c2;font-size:13px}
+    .muted{color:#7b8596}
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="sidebar" style="min-width:140px;color:#e8eef6;font-size:14px;line-height:1.3;">
+      <h3 style="margin:0 0 8px 0;font-size:15px;">STATE</h3>
+      <pre id="stateMenu" style="margin:0;white-space:pre-wrap;"></pre>
+    </div>
+    <pre id="screen" aria-label="ASCII game screen" tabindex="0"></pre>
+    <div id="hud">
+      <span>Use <strong>arrow keys</strong> or <strong>WASD</strong> to move. </span>
+      <span class="muted">(Walls: #  • Floor: (space)  • You: @  • Pushable: o  • Pump: *  • Map Bomb: B  • Box: Ø)</span>
+    </div>
+  </div>
+  <script src="mapgen.js"></script>
+  <script src="ui.js"></script>
+  <script src="game.js"></script>
+  <script src="client.js"></script>
+  <script>
+    const gameClient = new GameClient();
+
+    // In your game loop or input handlers
+    function handleInput() {
+      // Send your player's position to server
+      gameClient.sendMove(playerX, playerY);
+    }
+
+    // In your render loop
+    function render() {
+      // Render your player
+      renderPlayer(gameClient.getMyPlayer());
+      
+      // Render other players
+      gameClient.getOtherPlayers().forEach(player => {
+        renderPlayer(player);
+      });
+    }
+  </script>
+  <script>
+    // Simple ASCII frontend client
+    // Map generation delegated to external `mapgen.js` (window.generateMap)
+    // Set desired size: columns x rows
+    const initialCols = 40;
+    const initialRows = 20;
+    let width = initialCols;
+    let height = initialRows;
+    // Tile symbol constants (CAPS for easy refactor)
+    const TILE_WALL = '#';
+    const TILE_FLOOR = '.';
+    const TILE_PLAYER = '@';
+    const TILE_PUSH = 'o';
+    const TILE_PUMP = '*';
+
+    const PUMP_VALUE_DEFAULT = 25;
+
+    // map generation options (use constants where appropriate)
+    const mapOpts = {
+      pumpCount: 5,
+      pumpSymbol: TILE_PUMP,
+      pumpValue: PUMP_VALUE_DEFAULT,
+      // generator probabilities can be adjusted here if desired
+      wallProb: 0.08,
+      pushableProb: 0.06
+    };
+
+    // generate initial map
+    let map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : [];
+
+    // Player start (find first floor tile from top-left)
+    let player = {x: 1, y: 1};
+    outer: for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (map[y][x] === TILE_FLOOR) { player.x = x; player.y = y; break outer; }
+      }
+    }
+
+    const screenEl = document.getElementById('screen');
+
+    const playerState = { jumps: 1, bombs: 0, dash: false, oxygen: 50 };
+    const maxOxygen = 100;
+
+    // Use the extracted game module to manage input, rendering and state
+    const game = createGame({
+      map, width, height, screenEl,
+      stateMenuEl: document.getElementById('stateMenu'),
+      mapOpts, TILE_WALL, TILE_FLOOR, TILE_PLAYER, TILE_PUSH, TILE_PUMP,
+      PUMP_VALUE_DEFAULT, playExitAnimation: (typeof playExitAnimation !== 'undefined') ? playExitAnimation : undefined,
+      generateMap: (typeof generateMap !== 'undefined') ? generateMap : undefined
+    });
+
+    // spawn a few aliens and start the game loop
+    game.start();
+    screenEl.focus();
+  </script>
+</body>
+</html>
