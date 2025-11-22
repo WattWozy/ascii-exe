@@ -104,3 +104,12 @@ The communication uses **WebSockets** with JSON messages.
 - [x] **Multiplayer Sync**: Players see each other, aliens, and map changes in real-time.
 - [x] **Chat**: Functional room chat with history.
 - [x] **Room Logic**: Support for multiple isolated game rooms.
+
+## 🖥 Frontend Structure
+
+- **`index.html`**: The landing page. Provides options to start a new game or join an existing room.
+- **`game.html`**: The main game client. Connects to the server via WebSocket and renders the game.
+- **`client.js`**: Handles WebSocket communication and game initialization.
+- **`game.js`**: Core game logic and rendering.
+- **`ui.js`**: UI helper functions.
+- **`mapgen.js`**: Map generation logic (shared with server).

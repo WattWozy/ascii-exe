@@ -13,7 +13,12 @@
       oxygenBarEl,
       oxygenTextEl,
       mapOpts = {},
-      TILE_WALL = '#', TILE_FLOOR = '.', TILE_PLAYER = '@', TILE_PUSH = 'o', TILE_PUMP = '*', TILE_DROPLET = '•',
+      TILE_WALL = (window.TILES && window.TILES.WALL) || '#',
+      TILE_FLOOR = (window.TILES && window.TILES.FLOOR) || '.',
+      TILE_PLAYER = (window.TILES && window.TILES.PLAYER) || '@',
+      TILE_PUSH = (window.TILES && window.TILES.PUSHABLE) || 'o',
+      TILE_PUMP = (window.TILES && window.TILES.PUMP) || '*',
+      TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '•',
       PUMP_VALUE_DEFAULT = 25,
       playExitAnimation, generateMap,
       // new callbacks (client supplies these). fall back to no-ops that try window.gameClient if present
@@ -162,16 +167,16 @@
           }
           // Then check for aliens
           else if (alienPositions.has(`${x},${y}`)) {
-            ch = '&';
+            ch = '👽';
             classes.push('alien');
           }
           else if (ch === TILE_FLOOR) { ch = ' '; }
           else if (ch === TILE_PUMP) { classes.push('pump'); }
-          else if (ch === (mapOpts.boxSymbol || 'Ø')) {
+          else if (ch === (mapOpts.boxSymbol || (window.TILES && window.TILES.BOX) || 'Ø')) {
             const box = findBoxAt(x, y);
             if (box && box.content) classes.push('box-filled'); else classes.push('box-empty');
           }
-          else if (ch === (mapOpts.bombSymbol || 'B')) { classes.push('map-bomb'); }
+          else if (ch === (mapOpts.bombSymbol || (window.TILES && window.TILES.BOMB) || 'B')) { classes.push('map-bomb'); }
           else if (ch === TILE_DROPLET) { classes.push('droplet'); }
           // check bombs to color the wall if attached
           const b = findBombAt(x, y);

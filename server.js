@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
+const { TILES } = require('./public/constants.js');
 
 // Simple map generator for server
 function generateSimpleMap(width, height) {
@@ -15,13 +16,13 @@ function generateSimpleMap(width, height) {
         const midY = Math.floor(height / 2);
         if ((y === 0 && x === midX) || (y === height - 1 && x === midX) ||
           (x === 0 && y === midY) || (x === width - 1 && y === midY)) {
-          row.push('.');
+          row.push(TILES.FLOOR);
         } else {
-          row.push('#');
+          row.push(TILES.WALL);
         }
       } else {
         // Inner cells: mostly floor with some walls
-        row.push(Math.random() < 0.15 ? '#' : '.');
+        row.push(Math.random() < 0.15 ? TILES.WALL : TILES.FLOOR);
       }
     }
     map.push(row);
@@ -95,7 +96,7 @@ class GameRoom {
   // Populate boxes with contents (server-authoritative)
   populateBoxes() {
     this.boxes = [];
-    const boxSymbol = 'Ø';
+    const boxSymbol = TILES.BOX;
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         if (this.map[y] && this.map[y][x] === boxSymbol) {
@@ -148,7 +149,7 @@ class GameRoom {
         const midX = Math.floor(this.width / 2);
         for (let x = 0; x < this.width; x++) {
           const checkX = (midX + x) % this.width;
-          if (this.map[0] && this.map[0][checkX] === '.') {
+          if (this.map[0] && this.map[0][checkX] === TILES.FLOOR) {
             return { x: checkX, y: 0 };
           }
         }
@@ -160,7 +161,7 @@ class GameRoom {
         const lastY = this.height - 1;
         for (let x = 0; x < this.width; x++) {
           const checkX = (midX + x) % this.width;
-          if (this.map[lastY] && this.map[lastY][checkX] === '.') {
+          if (this.map[lastY] && this.map[lastY][checkX] === TILES.FLOOR) {
             return { x: checkX, y: lastY };
           }
         }
@@ -171,7 +172,7 @@ class GameRoom {
         const midY = Math.floor(this.height / 2);
         for (let y = 0; y < this.height; y++) {
           const checkY = (midY + y) % this.height;
-          if (this.map[checkY] && this.map[checkY][0] === '.') {
+          if (this.map[checkY] && this.map[checkY][0] === TILES.FLOOR) {
             return { x: 0, y: checkY };
           }
         }
@@ -183,7 +184,7 @@ class GameRoom {
         const lastX = this.width - 1;
         for (let y = 0; y < this.height; y++) {
           const checkY = (midY + y) % this.height;
-          if (this.map[checkY] && this.map[checkY][lastX] === '.') {
+          if (this.map[checkY] && this.map[checkY][lastX] === TILES.FLOOR) {
             return { x: lastX, y: checkY };
           }
         }
@@ -206,7 +207,7 @@ class GameRoom {
     // Last resort: find any floor tile
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        if (this.map[y] && this.map[y][x] === '.') {
+        if (this.map[y] && this.map[y][x] === TILES.FLOOR) {
           return { x, y };
         }
       }
@@ -277,27 +278,27 @@ class GameRoom {
     const changes = [];
 
     // Collect oxygen pump
-    if (tile === '*') {
+    if (tile === TILES.PUMP) {
       const gained = 25; // PUMP_VALUE_DEFAULT
       player.oxygen = Math.min(player.maxOxygen, player.oxygen + gained);
-      this.map[y][x] = '.';
-      changes.push({ x, y, tile: '.' });
+      this.map[y][x] = TILES.FLOOR;
+      changes.push({ x, y, tile: TILES.FLOOR });
       this.broadcastMapChange(changes);
       return true;
     }
 
     // Collect droplet
-    if (tile === '•') {
+    if (tile === TILES.DROPLET) {
       player.oxygen = player.maxOxygen;
-      this.map[y][x] = '.';
-      changes.push({ x, y, tile: '.' });
+      this.map[y][x] = TILES.FLOOR;
+      changes.push({ x, y, tile: TILES.FLOOR });
       this.broadcastMapChange(changes);
       return true;
     }
 
     // Collect box
     const box = this.findBoxAt(x, y);
-    if (box && tile === 'Ø') {
+    if (box && tile === TILES.BOX) {
       if (box.content === 'bomb') {
         player.bombs = (player.bombs || 0) + 1;
       } else if (box.content === 'oxygen') {
@@ -305,19 +306,19 @@ class GameRoom {
         player.oxygen = Math.min(player.maxOxygen, player.oxygen + gained);
       }
       // Remove box
-      this.map[y][x] = '.';
+      this.map[y][x] = TILES.FLOOR;
       const idx = this.boxes.indexOf(box);
       if (idx !== -1) this.boxes.splice(idx, 1);
-      changes.push({ x, y, tile: '.' });
+      changes.push({ x, y, tile: TILES.FLOOR });
       this.broadcastMapChange(changes);
       return true;
     }
 
     // Collect map bomb
-    if (tile === 'B') {
+    if (tile === TILES.BOMB) {
       player.bombs = (player.bombs || 0) + 1;
-      this.map[y][x] = '.';
-      changes.push({ x, y, tile: '.' });
+      this.map[y][x] = TILES.FLOOR;
+      changes.push({ x, y, tile: TILES.FLOOR });
       this.broadcastMapChange(changes);
       return true;
     }
@@ -333,16 +334,16 @@ class GameRoom {
     // Validate push
     if (fromX < 0 || fromY < 0 || fromX >= this.width || fromY >= this.height) return false;
     if (toX < 0 || toY < 0 || toX >= this.width || toY >= this.height) return false;
-    if (!this.map[fromY] || this.map[fromY][fromX] !== 'o') return false; // Must be pushable
-    if (!this.map[toY] || this.map[toY][toX] !== '.') return false; // Destination must be floor
+    if (!this.map[fromY] || this.map[fromY][fromX] !== TILES.PUSHABLE) return false; // Must be pushable
+    if (!this.map[toY] || this.map[toY][toX] !== TILES.FLOOR) return false; // Destination must be floor
 
     // Perform push
-    this.map[fromY][fromX] = '.';
-    this.map[toY][toX] = 'o';
+    this.map[fromY][fromX] = TILES.FLOOR;
+    this.map[toY][toX] = TILES.PUSHABLE;
 
     this.broadcastMapChange([
-      { x: fromX, y: fromY, tile: '.' },
-      { x: toX, y: toY, tile: 'o' }
+      { x: fromX, y: fromY, tile: TILES.FLOOR },
+      { x: toX, y: toY, tile: TILES.PUSHABLE }
     ]);
     return true;
   }
@@ -355,7 +356,7 @@ class GameRoom {
     // Validate
     if (player.bombs <= 0) return false;
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
-    if (!this.map[y] || this.map[y][x] !== '#') return false; // Must be a wall
+    if (!this.map[y] || this.map[y][x] !== TILES.WALL) return false; // Must be a wall
     if (this.findBombAt(x, y)) return false; // Already a bomb here
 
     // Place bomb
@@ -373,10 +374,10 @@ class GameRoom {
         // Explode
         setTimeout(() => {
           if (bomb.stopped) return;
-          this.map[bomb.y][bomb.x] = '.';
+          this.map[bomb.y][bomb.x] = TILES.FLOOR;
           const idx = this.bombs.indexOf(bomb);
           if (idx !== -1) this.bombs.splice(idx, 1);
-          this.broadcastMapChange([{ x: bomb.x, y: bomb.y, tile: '.' }]);
+          this.broadcastMapChange([{ x: bomb.x, y: bomb.y, tile: TILES.FLOOR }]);
         }, bomb.delay);
       } else {
         setTimeout(tick, bomb.delay);
@@ -403,7 +404,7 @@ class GameRoom {
         const newX = Math.max(0, Math.min(this.width - 1, data.x));
         const newY = Math.max(0, Math.min(this.height - 1, data.y));
         // Check if the target tile is walkable
-        if (this.map[newY] && this.map[newY][newX] !== '#') {
+        if (this.map[newY] && this.map[newY][newX] !== TILES.WALL) {
           player.x = newX;
           player.y = newY;
 
@@ -452,7 +453,7 @@ class GameRoom {
       const y = Math.floor(Math.random() * (this.height - 2)) + 1;
 
       // Check if tile is floor and not occupied by a player or alien
-      if (this.map[y] && this.map[y][x] === '.') {
+      if (this.map[y] && this.map[y][x] === TILES.FLOOR) {
         const posKey = `${x},${y}`;
         if (!playerPositions.has(posKey) && !alienPositions.has(posKey)) {
           this.aliens.push({ x, y });
@@ -484,7 +485,7 @@ class GameRoom {
         if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
 
         // Can only move into floor tiles (cannot push or move into pumps/droplets/aliens/players)
-        if (this.map[ny] && this.map[ny][nx] === '.' && !playerPositions.has(`${nx},${ny}`)) {
+        if (this.map[ny] && this.map[ny][nx] === TILES.FLOOR && !playerPositions.has(`${nx},${ny}`)) {
           // Also check if another alien is at this position
           const alienAtPos = this.aliens.some(other => other !== a && other.x === nx && other.y === ny);
           if (!alienAtPos) {
