@@ -15,9 +15,11 @@
       boxSymbol: 'Ø',
       bombCount: 5,
       bombSymbol: 'B',
-      pumpCount: 5,
-      pumpSymbol: '💧',
-      pumpValue: 25,
+      boxSymbol: 'Ø',
+      bombCount: 5,
+      bombSymbol: 'B',
+      dropletCount: 5,
+      dropletSymbol: '•',
       holeMidpoints: true
     };
   }
@@ -61,17 +63,17 @@
       newMap.push(row.split(''));
     }
 
-    // place oxygen pumps on floor tiles ('.')
-    if (opts.pumpCount && opts.pumpSymbol) {
+    // place oxygen droplets on floor tiles ('.')
+    if (opts.dropletCount && opts.dropletSymbol) {
       let placed = 0;
       const maxAttempts = cols * rows * 5;
       let attempts = 0;
-      while (placed < opts.pumpCount && attempts < maxAttempts) {
+      while (placed < opts.dropletCount && attempts < maxAttempts) {
         attempts++;
         const px = Math.floor(rand() * (cols - 2)) + 1; // avoid border
         const py = Math.floor(rand() * (rows - 2)) + 1;
         if (newMap[py][px] === '.') {
-          newMap[py][px] = opts.pumpSymbol;
+          newMap[py][px] = opts.dropletSymbol;
           placed++;
         }
       }

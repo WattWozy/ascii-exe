@@ -9,8 +9,11 @@
       height: initialHeight,
       screenEl,
       stateMenuEl,
+      bombsEl,
+      oxygenBarEl,
+      oxygenTextEl,
       mapOpts = {},
-      TILE_WALL = '#', TILE_FLOOR = '.', TILE_PLAYER = '@', TILE_PUSH = 'o', TILE_PUMP = '*',
+      TILE_WALL = '#', TILE_FLOOR = '.', TILE_PLAYER = '@', TILE_PUSH = 'o', TILE_PUMP = '*', TILE_DROPLET = '•',
       PUMP_VALUE_DEFAULT = 25,
       playExitAnimation, generateMap,
       // new callbacks (client supplies these). fall back to no-ops that try window.gameClient if present
@@ -36,83 +39,11 @@
       }
     }
 
-    // aliens list - can be managed client-side OR server-side
+    // aliens list - managed by server
     let aliens = [];
-    let aliensTimer = null;
-    let useServerAliens = false; // Flag to disable client-side alien movement
 
     // other players list (from server)
     let otherPlayers = [];
-
-    // Flag to use server boxes instead of client-generated
-    let useServerBoxes = false;
-    // when a map is loaded or regenerated we populate boxes[] with contents
-    function populateBoxes() {
-      boxes.length = 0;
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          if (map[y][x] === (mapOpts.boxSymbol || 'Ø')) {
-            // choose content: 50% bomb, 50% oxygen (can tune)
-            const content = (Math.random() < 0.5) ? 'bomb' : 'oxygen';
-            boxes.push({ x, y, content });
-          }
-        }
-      }
-    }
-    function spawnAliens(count = 3) {
-      let placed = 0;
-      const maxAttempts = width * height * 5;
-      let attempts = 0;
-      while (placed < count && attempts < maxAttempts) {
-        attempts++;
-        const x = Math.floor(Math.random() * (width - 2)) + 1;
-        const y = Math.floor(Math.random() * (height - 2)) + 1;
-        if (map[y][x] === TILE_FLOOR && !(x === player.x && y === player.y)) {
-          map[y][x] = '&';
-          aliens.push({ x, y });
-          placed++;
-        }
-      }
-    }
-
-
-    // Step aliens: random movement, cannot move objects (# or pushables).
-    // If an alien has no valid moves (surrounded by non-floor tiles) it becomes a droplet.
-    const TILE_DROPLET = mapOpts.dropletSymbol || '•';
-    function stepAliens() {
-      // iterate from end so we can splice safely
-      for (let i = aliens.length - 1; i >= 0; i--) {
-        const a = aliens[i];
-        const ax = a.x, ay = a.y;
-        const candidates = [];
-        const deltas = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-        for (const [dx, dy] of deltas) {
-          const nx = ax + dx, ny = ay + dy;
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-          // can only move into floor tiles (cannot push or move into pumps/droplets/aliens/player)
-          if (map[ny][nx] === TILE_FLOOR && !(nx === player.x && ny === player.y)) {
-            candidates.push([nx, ny]);
-          }
-        }
-
-        if (candidates.length === 0) {
-          // trapped: turn into oxygen droplet
-          map[ay][ax] = TILE_DROPLET;
-          aliens.splice(i, 1);
-          continue;
-        }
-
-        // pick a random candidate and move
-        const [nx, ny] = candidates[Math.floor(Math.random() * candidates.length)];
-        // move on map
-        map[ay][ax] = TILE_FLOOR;
-        map[ny][nx] = '&';
-        // update alien position
-        a.x = nx; a.y = ny;
-      }
-      // re-render after moving
-      render();
-    }
     // bombs attached to walls
     const bombs = [];
     // boxes placed on the map; each box holds a single collectable: 'bomb' or 'oxygen'
@@ -243,13 +174,7 @@
             if (box && box.content) classes.push('box-filled'); else classes.push('box-empty');
           }
           else if (ch === (mapOpts.bombSymbol || 'B')) { classes.push('map-bomb'); }
-          else if (ch === '&') {
-            // Only show as alien if not already handled by alienPositions
-            if (!alienPositions.has(`${x},${y}`)) {
-              classes.push('alien');
-            }
-          }
-          else if (ch === (mapOpts.dropletSymbol || '•')) { classes.push('droplet'); }
+          else if (ch === TILE_DROPLET) { classes.push('droplet'); }
           // check bombs to color the wall if attached
           const b = findBombAt(x, y);
           if (b) {
@@ -263,7 +188,21 @@
         out += '<br/>';
       }
       screenEl.innerHTML = out;
-      stateMenuEl.textContent = `bombs: ${playerState.bombs}  dash: ${playerState.dash ? 'yes' : 'no'}  oxygen: ${playerState.oxygen}/${maxOxygen}`;
+
+      // Update sidebar stats
+      if (bombsEl) bombsEl.textContent = playerState.bombs;
+      if (oxygenBarEl) {
+        const pct = Math.max(0, Math.min(100, (playerState.oxygen / maxOxygen) * 100));
+        oxygenBarEl.style.width = `${pct}%`;
+        // Change color based on level
+        if (pct < 25) oxygenBarEl.style.backgroundColor = '#ff6666'; // red
+        else if (pct < 50) oxygenBarEl.style.backgroundColor = '#ffeb3b'; // yellow
+        else oxygenBarEl.style.backgroundColor = '#4fc3ff'; // blue
+      }
+      if (oxygenTextEl) oxygenTextEl.textContent = `${playerState.oxygen}/${maxOxygen}`;
+
+      // Update state menu (removed bombs/oxygen, kept dash/jumps)
+      stateMenuEl.textContent = `dash: ${playerState.dash ? 'yes' : 'no'}  jumps: ${playerState.jumps}`;
     }
 
     // input handling
@@ -307,20 +246,9 @@
         if (isExit(player.x, player.y)) {
           if (typeof playExitAnimation === 'function') {
             playExitAnimation(screenEl).then(() => {
-              // stop and clear any active bombs before generating a new map
-              bombs.forEach(b => b.stopped = true);
-              bombs.length = 0;
-
               // generate new map
               map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : map;
               height = map.length; width = map[0] ? map[0].length : width;
-              // clear aliens and respawn
-              aliens = [];
-              spawnAliens(3);
-              // populate boxes on the new map - only if not using server boxes
-              if (!useServerBoxes) {
-                populateBoxes();
-              }
               // place player at first floor tile
               outer2: for (let yy = 0; yy < height; yy++) {
                 for (let xx = 0; xx < width; xx++) {
@@ -330,19 +258,8 @@
               render();
             });
           } else {
-            // stop and clear any active bombs before generating a new map
-            bombs.forEach(b => b.stopped = true);
-            bombs.length = 0;
-
             map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : map;
             height = map.length; width = map[0] ? map[0].length : width;
-            // clear aliens and respawn
-            aliens = [];
-            spawnAliens(3);
-            // populate boxes on the new map - only if not using server boxes
-            if (!useServerBoxes) {
-              populateBoxes();
-            }
           }
         }
       }
@@ -359,20 +276,10 @@
     function start() {
       if (started) return;
       started = true;
-      // initial aliens - only spawn if not using server aliens
-      if (!useServerAliens) {
-        spawnAliens(mapOpts.alienCount || 3);
-        // start alien movement timer
-        aliensTimer = setInterval(stepAliens, mapOpts.alienTickMs || 700);
-      }
-      // populate boxes after initial map load - only if not using server boxes
-      if (!useServerBoxes) {
-        populateBoxes();
-      }
       render();
       window.addEventListener('keydown', keyHandler);
     }
-    function stop() { if (!started) return; started = false; window.removeEventListener('keydown', keyHandler); if (aliensTimer) { clearInterval(aliensTimer); aliensTimer = null; } }
+    function stop() { if (!started) return; started = false; window.removeEventListener('keydown', keyHandler); }
 
     // Allow external code to update player position (for server sync)
     function setPlayerPosition(x, y) {
@@ -397,12 +304,6 @@
 
     // Update aliens from server (authoritative)
     function updateAliens(serverAliens) {
-      useServerAliens = true;
-      // Stop client-side alien movement if running
-      if (aliensTimer) {
-        clearInterval(aliensTimer);
-        aliensTimer = null;
-      }
       // Update aliens array with server data
       aliens = serverAliens.map(a => ({ x: a.x, y: a.y }));
       render();
@@ -428,7 +329,6 @@
 
     // Update boxes from server (authoritative)
     function updateBoxes(serverBoxes) {
-      useServerBoxes = true;
       boxes.length = 0;
       serverBoxes.forEach(b => {
         boxes.push({ x: b.x, y: b.y, content: b.content });
@@ -478,7 +378,7 @@
     }
 
     return {
-      start, stop, getState, render, spawnAliens,
+      start, stop, getState, render,
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory

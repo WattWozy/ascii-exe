@@ -21,7 +21,7 @@ class GameClient {
     const chatInput = document.getElementById('chat-input');
     const chatInputContainer = document.getElementById('chat-input-container');
     const chatMessages = document.getElementById('chat-messages');
-    
+
     if (!chatInput || !chatInputContainer || !chatMessages) return;
 
     // Handle C key to open chat (only when not typing in input)
@@ -30,7 +30,7 @@ class GameClient {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         return;
       }
-      
+
       if (e.key === 'c' || e.key === 'C') {
         if (!this.chatOpen) {
           this.openChat();
@@ -67,7 +67,7 @@ class GameClient {
     const chatInput = document.getElementById('chat-input');
     const chatInputContainer = document.getElementById('chat-input-container');
     if (!chatInput || !chatInputContainer) return;
-    
+
     this.chatOpen = true;
     chatInputContainer.classList.add('active');
     chatInput.focus();
@@ -77,7 +77,7 @@ class GameClient {
     const chatInput = document.getElementById('chat-input');
     const chatInputContainer = document.getElementById('chat-input-container');
     if (!chatInput || !chatInputContainer) return;
-    
+
     this.chatOpen = false;
     chatInputContainer.classList.remove('active');
     chatInput.blur();
@@ -92,7 +92,7 @@ class GameClient {
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `chat-message ${isSystem ? 'system' : ''}`;
-    
+
     if (isSystem) {
       messageDiv.textContent = message;
     } else if (playerName) {
@@ -115,13 +115,13 @@ class GameClient {
 
   loadChatHistory(chatHistory) {
     if (!chatHistory || !Array.isArray(chatHistory)) return;
-    
+
     const chatMessages = document.getElementById('chat-messages');
     if (!chatMessages) return;
-    
+
     // Clear existing messages
     chatMessages.innerHTML = '';
-    
+
     // Load all messages from history
     chatHistory.forEach(msg => {
       if (msg.type === 'chat') {
@@ -174,36 +174,39 @@ class GameClient {
 
         // create game instance and inject callbacks
         this.game = window.createGame({
-            map: data.map,
-            width: data.width,
-            height: data.height,
-            screenEl: document.getElementById('screen') || document.getElementById('game-screen'),
-            stateMenuEl: document.getElementById('stateMenu') || document.getElementById('game-state'),
-            generateMap: (typeof window.generateMap !== 'undefined') ? window.generateMap : undefined,
-            onSendMove: (x, y) => this.sendMove(x, y),
-            onAction: (action) => this.sendAction(action)
+          map: data.map,
+          width: data.width,
+          height: data.height,
+          screenEl: document.getElementById('screen') || document.getElementById('game-screen'),
+          stateMenuEl: document.getElementById('stateMenu') || document.getElementById('game-state'),
+          bombsEl: document.getElementById('bombs-val'),
+          oxygenBarEl: document.getElementById('oxygen-bar'),
+          oxygenTextEl: document.getElementById('oxygen-val'),
+          generateMap: (typeof window.generateMap !== 'undefined') ? window.generateMap : undefined,
+          onSendMove: (x, y) => this.sendMove(x, y),
+          onAction: (action) => this.sendAction(action)
         });
 
         // Set initial player position from server if provided
         if (data.playerX !== undefined && data.playerY !== undefined && this.game.setPlayerPosition) {
           this.game.setPlayerPosition(data.playerX, data.playerY);
         }
-        
+
         // Set initial aliens from server if provided
         if (data.gameState && data.gameState.aliens && this.game.updateAliens) {
           this.game.updateAliens(data.gameState.aliens);
         }
-        
+
         // Set initial boxes from server
         if (data.gameState && data.gameState.boxes && this.game.updateBoxes) {
           this.game.updateBoxes(data.gameState.boxes);
         }
-        
+
         // Set initial bombs from server
         if (data.gameState && data.gameState.bombs && this.game.updateBombs) {
           this.game.updateBombs(data.gameState.bombs);
         }
-        
+
         // Set initial other players if any
         if (data.gameState && data.gameState.players && this.game.updateOtherPlayers) {
           const otherPlayers = data.gameState.players
@@ -211,7 +214,7 @@ class GameClient {
             .map(p => ({ id: p.id, x: p.x, y: p.y, color: p.color }));
           this.game.updateOtherPlayers(otherPlayers);
         }
-        
+
         // Set initial inventory from server
         if (data.playerBombs !== undefined && this.game.updateInventory) {
           this.game.updateInventory({
@@ -221,7 +224,7 @@ class GameClient {
             dash: false
           });
         }
-        
+
         // Load chat history
         if (data.chatHistory && Array.isArray(data.chatHistory)) {
           this.loadChatHistory(data.chatHistory);
@@ -233,7 +236,7 @@ class GameClient {
       case 'stateUpdate':
         // Update game state from server
         this.players = new Map(data.gameState.players.map(p => [p.id, p]));
-        
+
         // Update local player position from authoritative server state
         if (this.game && this.game.updatePlayerPosition) {
           const myPlayer = this.players.get(this.playerId);
@@ -250,23 +253,23 @@ class GameClient {
             }
           }
         }
-        
+
         // Update other players from server
         if (this.game && this.game.updateOtherPlayers) {
           const otherPlayers = this.getOtherPlayers();
           this.game.updateOtherPlayers(otherPlayers);
         }
-        
+
         // Update aliens from server (authoritative)
         if (this.game && this.game.updateAliens && data.gameState.aliens) {
           this.game.updateAliens(data.gameState.aliens);
         }
-        
+
         // Update boxes from server (authoritative)
         if (this.game && this.game.updateBoxes && data.gameState.boxes) {
           this.game.updateBoxes(data.gameState.boxes);
         }
-        
+
         // Update bombs from server (authoritative)
         if (this.game && this.game.updateBombs && data.gameState.bombs) {
           this.game.updateBombs(data.gameState.bombs);
@@ -291,13 +294,13 @@ class GameClient {
         // New player joined
         this.players.set(data.player.id, data.player);
         console.log('Player joined:', data.player.id);
-        
+
         // Show in chat
         const joinedPlayer = this.players.get(data.player.id);
         if (joinedPlayer && joinedPlayer.id !== this.playerId) {
           this.addChatMessage(`${this.getPlayerName(joinedPlayer.id)} joined the room`, true);
         }
-        
+
         // Update other players display
         if (this.game && this.game.updateOtherPlayers) {
           const otherPlayers = this.getOtherPlayers();
@@ -309,7 +312,7 @@ class GameClient {
         // Player left
         this.players.delete(data.playerId);
         console.log('Player left:', data.playerId);
-        
+
         // Show in chat
         this.addChatMessage(`${this.getPlayerName(data.playerId)} left the room`, true);
         break;
