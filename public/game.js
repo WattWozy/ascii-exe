@@ -118,9 +118,7 @@
       return true;
     }
 
-    function isExit(x, y) {
-      return map[y] && map[y][x] === TILE_FLOOR && (x === 0 || x === width - 1 || y === 0 || y === height - 1);
-    }
+
 
     function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -243,25 +241,7 @@
         // Server will handle collection automatically when player moves onto items
         onSendMove(nx, ny);
         render();
-        if (isExit(player.x, player.y)) {
-          if (typeof playExitAnimation === 'function') {
-            playExitAnimation(screenEl).then(() => {
-              // generate new map
-              map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : map;
-              height = map.length; width = map[0] ? map[0].length : width;
-              // place player at first floor tile
-              outer2: for (let yy = 0; yy < height; yy++) {
-                for (let xx = 0; xx < width; xx++) {
-                  if (map[yy][xx] === TILE_FLOOR) { player.x = xx; player.y = yy; break outer2; }
-                }
-              }
-              render();
-            });
-          } else {
-            map = (typeof generateMap === 'function') ? generateMap(width, height, mapOpts) : map;
-            height = map.length; width = map[0] ? map[0].length : width;
-          }
-        }
+
       }
     };
 

@@ -1,185 +1,106 @@
-# Game Architecture: Server vs Client Responsibilities
+# Game Architecture
 
 ## Overview
-This document outlines what should be **server-authoritative** (shared state) vs **client-side** (local presentation/input).
+The game uses a **Server-Authoritative** architecture with **Client-Side Prediction**. The server is the single source of truth for the game state, while the client handles input and rendering with optimistic updates to ensure responsiveness.
 
 ---
 
-## 🟦 **SERVER (Authoritative State)**
+## 🏗 Core Systems
 
-The server is the **single source of truth** for all shared game state.
+### 1. Server Authority
+The server maintains the master state of:
+- **Map**: The 2D grid of tiles (walls, floors, etc.).
+- **Players**: Position, color, inventory (bombs, oxygen, jumps).
+- **Entities**: Aliens, Boxes (and their contents), Active Bombs.
+- **Rooms**: Game sessions are isolated in "rooms".
 
-### **Map State**
-- **Tile positions** - What tile is at each (x,y) coordinate
-- **Collectibles** - Oxygen pumps, boxes, map bombs, droplets
-- **Pushable objects** - Positions of pushable walls (`o`)
-- **Bombs** - Active bomb placements and their states
-- **Box contents** - What's inside each box (bomb or oxygen)
+### 2. Client Prediction & Synchronization
+To prevent lag perception:
+- **Movement**: Client updates player position immediately. Server validates and sends corrections if needed.
+- **Actions**: Pushing boxes or placing bombs is shown immediately. Server validates and broadcasts the result.
+- **State Updates**: The server broadcasts the full game state (players, aliens, boxes) at a fixed tick rate (60Hz logic, broadcast periodically).
 
-**Why:** All players must see the same map state. If one player collects an oxygen pump, all players should see it disappear.
+### 3. Map Management
+- **Generation**: The server generates the map (using `mapgen.js` or fallback).
+- **Updates**: When a tile changes (e.g., wall blown up, item collected), the server broadcasts a `mapChange` event to all clients.
 
-### **Player State**
-- **Positions** - Current (x,y) coordinates
-- **Inventory** - Bombs count, oxygen level, jumps remaining
-- **Colors** - Assigned player color
-
-**Why:** Prevents cheating and ensures consistency. Server validates all actions.
-
-### **Entity State**
-- **Aliens** - Positions and movement
-- **Boxes** - Positions and contents
-
-**Why:** All players must see synchronized aliens and boxes.
+### 4. Chat System
+- **Room-based**: Messages are broadcast only to players in the same room.
+- **History**: The server stores a limited history of messages for new joiners.
 
 ---
 
-## 🟨 **CLIENT (Presentation & Input)**
+## 📡 Communication Protocol
 
-The client handles **rendering** and **input**, with **local prediction** for responsiveness.
+The communication uses **WebSockets** with JSON messages.
 
-### **Rendering**
-- Display map tiles
-- Render players, aliens, objects
-- UI/HUD updates
-- Visual effects
+### Client → Server
 
-**Why:** Rendering is expensive and doesn't need to be synchronized.
+| Type | Fields | Description |
+|------|--------|-------------|
+| `joinRoom` | `{ roomId }` | Request to join a specific game room. |
+| `move` | `{ x, y }` | Request to move to a coordinate. |
+| `action` | `{ action: 'collect', x, y }` | Request to collect an item. |
+| `action` | `{ action: 'push', fromX, fromY, toX, toY }` | Request to push a wall/box. |
+| `action` | `{ action: 'placeBomb', x, y }` | Request to place a bomb. |
+| `chat` | `{ message }` | Send a chat message. |
 
-### **Input Handling**
-- Keyboard input
-- Movement requests
-- Action requests (collect, push, place bomb)
+### Server → Client
 
-**Why:** Input is captured locally and sent to server for validation.
-
-### **Local Prediction**
-- Immediate visual feedback (optimistic updates)
-- Server corrections override predictions
-
-**Why:** Makes the game feel responsive. Server always has final say.
-
----
-
-## 📡 **Communication Protocol**
-
-### **Client → Server Messages**
-
-1. **`move`** - Player movement request
-   ```json
-   { "type": "move", "x": 5, "y": 10 }
-   ```
-
-2. **`action`** - Game action
-   ```json
-   { "type": "action", "action": "collect", "x": 5, "y": 10 }
-   { "type": "action", "action": "push", "fromX": 5, "fromY": 10, "toX": 6, "toY": 10 }
-   { "type": "action", "action": "placeBomb", "x": 5, "y": 10 }
-   ```
-
-### **Server → Client Messages**
-
-1. **`init`** - Initial game state
-   ```json
-   {
-     "type": "init",
-     "playerId": "player_123",
-     "map": [...],
-     "width": 40,
-     "height": 20,
-     "playerX": 1,
-     "playerY": 1,
-     "playerColor": "#FFB6C1",
-     "gameState": {
-       "players": [...],
-       "aliens": [...],
-       "boxes": [...]
-     }
-   }
-   ```
-
-2. **`stateUpdate`** - Periodic state sync
-   ```json
-   {
-     "type": "stateUpdate",
-     "gameState": {
-       "players": [...],
-       "aliens": [...],
-       "mapChanges": [
-         { "x": 5, "y": 10, "tile": "." }
-       ]
-     }
-   }
-   ```
-
-3. **`mapChange`** - Immediate map update
-   ```json
-   {
-     "type": "mapChange",
-     "changes": [
-       { "x": 5, "y": 10, "tile": "." }
-     ]
-   }
-   ```
+| Type | Fields | Description |
+|------|--------|-------------|
+| `init` | `{ playerId, map, gameState, chatHistory, ... }` | Sent on join. Contains full initial state. |
+| `stateUpdate` | `{ gameState: { players, aliens, boxes, bombs } }` | Periodic sync of dynamic entities. |
+| `mapChange` | `{ changes: [{x, y, tile}] }` | Immediate update when map tiles change. |
+| `bombUpdate` | `{ bomb: {x, y, blinkOn} }` | Syncs bomb visual state (blinking). |
+| `playerJoined` | `{ player: {id, x, y, color} }` | Notification that a new player joined. |
+| `playerLeft` | `{ playerId }` | Notification that a player left. |
+| `chat` | `{ message, playerName, playerColor, ... }` | A chat message to display. |
 
 ---
 
-## 🔄 **Current Issues & Solutions**
+## 🧩 State Definitions
 
-### **Issue 1: Map Changes Not Synced**
-**Problem:** Collecting oxygen, pushing objects, placing bombs only happens client-side.
+### Map Tiles
+- `#`: Wall
+- `.`: Floor
+- `o`: Pushable Wall
+- `*`: Oxygen Pump
+- `•`: Oxygen Droplet
+- `Ø`: Box (contains Bomb or Oxygen)
+- `B`: Map Bomb
 
-**Solution:** 
-- Send `action` messages to server for all map modifications
-- Server validates and applies changes
-- Server broadcasts `mapChange` to all clients
-- Clients apply server changes (overriding local predictions)
+### Player Object
+```json
+{
+  "id": "player_123...",
+  "x": 5,
+  "y": 10,
+  "color": "#FFB6C1",
+  "bombs": 3,
+  "oxygen": 200,
+  "jumps": 1,
+  "dash": false
+}
+```
 
-### **Issue 2: Player Inventory Not Synced**
-**Problem:** Bombs, oxygen, jumps are only tracked client-side.
-
-**Solution:**
-- Server tracks player inventory
-- Server validates actions (e.g., can't place bomb without bombs)
-- Server sends inventory updates in `stateUpdate`
-
-### **Issue 3: Box Contents Not Synced**
-**Problem:** Box contents are randomly generated client-side.
-
-**Solution:**
-- Server generates and stores box contents
-- Server sends box data in `init` and `stateUpdate`
-- Clients render boxes based on server data
-
----
-
-## ✅ **Implementation Plan**
-
-1. **Server-side map state management**
-   - Track map as 2D array
-   - Track boxes with contents
-   - Track active bombs
-
-2. **Action validation**
-   - Validate collect actions (item exists, not already collected)
-   - Validate push actions (object exists, destination valid)
-   - Validate bomb placement (player has bombs, valid location)
-
-3. **Map change broadcasting**
-   - Send immediate `mapChange` messages for important events
-   - Include map state in periodic `stateUpdate`
-
-4. **Client-side updates**
-   - Apply server map changes
-   - Override local predictions with server state
-   - Update inventory from server
+### Box Object
+```json
+{
+  "x": 12,
+  "y": 8,
+  "content": "bomb" // or "oxygen"
+}
+```
 
 ---
 
-## 🎯 **Benefits**
+## ✅ Completed Features (Architecture Status)
 
-- **Consistency:** All players see the same game state
-- **Anti-cheat:** Server validates all actions
-- **Reliability:** Server is authoritative, clients can reconnect and sync
-- **Scalability:** Can add more players without client-side conflicts
-
-
+- [x] **Server-side Map State**: Server holds the 2D array and validates moves.
+- [x] **Action Validation**: Server checks if you have bombs, if a push is valid, etc.
+- [x] **Inventory Sync**: Server tracks oxygen/bombs and syncs to client.
+- [x] **Box Contents**: Server determines box contents (preventing client-side cheating).
+- [x] **Multiplayer Sync**: Players see each other, aliens, and map changes in real-time.
+- [x] **Chat**: Functional room chat with history.
+- [x] **Room Logic**: Support for multiple isolated game rooms.
