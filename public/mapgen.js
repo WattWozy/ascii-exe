@@ -6,7 +6,7 @@
 //  - holeMidpoints: whether to leave midpoints in borders as '.' (default true)
 //  - seed: optional number for deterministic pseudo-random (not implemented yet)
 
-(function() {
+(function () {
   function defaultOptions() {
     return {
       pushableProb: 0.06,
@@ -16,7 +16,7 @@
       bombCount: 5,
       bombSymbol: 'B',
       pumpCount: 5,
-      pumpSymbol: '⛽',
+      pumpSymbol: '💧',
       pumpValue: 25,
       holeMidpoints: true
     };

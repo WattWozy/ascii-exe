@@ -14,7 +14,7 @@ function generateSimpleMap(width, height) {
         const midX = Math.floor(width / 2);
         const midY = Math.floor(height / 2);
         if ((y === 0 && x === midX) || (y === height - 1 && x === midX) ||
-            (x === 0 && y === midY) || (x === width - 1 && y === midY)) {
+          (x === 0 && y === midY) || (x === width - 1 && y === midY)) {
           row.push('.');
         } else {
           row.push('#');
@@ -69,25 +69,25 @@ class GameRoom {
       started: false,
       createdAt: Date.now()
     };
-    
+
     // Aliens list - managed server-side for synchronization
     this.aliens = [];
     this.alienTickMs = 700; // Alien movement interval
-    
+
     // Boxes - track positions and contents server-side
     this.boxes = [];
     this.populateBoxes();
-    
+
     // Active bombs - track bomb placements
     this.bombs = [];
-    
+
     // Chat history - store all messages in this room
     this.chatHistory = [];
     this.maxChatHistory = 100; // Limit to last 100 messages
-    
+
     // Spawn initial aliens
     this.spawnAliens(3);
-    
+
     // Start the game loop for this room
     this.startGameLoop();
   }
@@ -219,10 +219,10 @@ class GameRoom {
     const playerCount = this.players.size;
     const edgeIndex = playerCount % 4; // Cycle through 4 edges: top, bottom, left, right
     const spawnPos = this.findEdgeSpawn(edgeIndex);
-    
+
     // Generate a random light color for this player
     const color = this.generatePlayerColor();
-    
+
     this.players.set(playerId, {
       id: playerId,
       ws: ws,
@@ -231,16 +231,16 @@ class GameRoom {
       color: color,
       // Player inventory (server-authoritative)
       bombs: 3,
-      oxygen: 50,
+      oxygen: 200,
       jumps: 1,
       dash: false,
-      maxOxygen: 100
+      maxOxygen: 200
     });
   }
 
   removePlayer(playerId) {
     this.players.delete(playerId);
-    
+
     // Clean up empty rooms after 5 minutes
     if (this.players.size === 0) {
       setTimeout(() => {
@@ -288,8 +288,7 @@ class GameRoom {
 
     // Collect droplet
     if (tile === '•') {
-      const gained = 25;
-      player.oxygen = Math.min(player.maxOxygen, player.oxygen + gained);
+      player.oxygen = player.maxOxygen;
       this.map[y][x] = '.';
       changes.push({ x, y, tile: '.' });
       this.broadcastMapChange(changes);
@@ -340,7 +339,7 @@ class GameRoom {
     // Perform push
     this.map[fromY][fromX] = '.';
     this.map[toY][toX] = 'o';
-    
+
     this.broadcastMapChange([
       { x: fromX, y: fromY, tile: '.' },
       { x: toX, y: toY, tile: 'o' }
@@ -369,7 +368,7 @@ class GameRoom {
       if (bomb.stopped) return;
       bomb.blinkOn = !bomb.blinkOn;
       bomb.delay = Math.max(bomb.minDelay, Math.floor(bomb.delay * 0.75));
-      
+
       if (bomb.delay <= bomb.minDelay) {
         // Explode
         setTimeout(() => {
@@ -382,7 +381,7 @@ class GameRoom {
       } else {
         setTimeout(tick, bomb.delay);
       }
-      
+
       // Broadcast bomb state update
       this.broadcast({
         type: 'bombUpdate',
@@ -407,12 +406,17 @@ class GameRoom {
         if (this.map[newY] && this.map[newY][newX] !== '#') {
           player.x = newX;
           player.y = newY;
-          
+
           // Auto-collect items when moving onto them
           this.handleCollect(playerId, newX, newY);
+
+          // Decrease oxygen on move
+          if (player.oxygen > 0) {
+            player.oxygen--;
+          }
         }
         break;
-      
+
       case 'action':
         if (data.action === 'collect') {
           this.handleCollect(playerId, data.x, data.y);
@@ -431,7 +435,7 @@ class GameRoom {
     let placed = 0;
     const maxAttempts = this.width * this.height * 5;
     let attempts = 0;
-    
+
     // Create sets for quick lookup
     const playerPositions = new Set();
     this.players.forEach(p => {
@@ -441,12 +445,12 @@ class GameRoom {
     this.aliens.forEach(a => {
       alienPositions.add(`${a.x},${a.y}`);
     });
-    
+
     while (placed < count && attempts < maxAttempts) {
       attempts++;
       const x = Math.floor(Math.random() * (this.width - 2)) + 1;
       const y = Math.floor(Math.random() * (this.height - 2)) + 1;
-      
+
       // Check if tile is floor and not occupied by a player or alien
       if (this.map[y] && this.map[y][x] === '.') {
         const posKey = `${x},${y}`;
@@ -461,24 +465,24 @@ class GameRoom {
 
   stepAliens() {
     const TILE_DROPLET = '•';
-    
+
     // Iterate from end so we can splice safely
     for (let i = this.aliens.length - 1; i >= 0; i--) {
       const a = this.aliens[i];
       const ax = a.x, ay = a.y;
       const candidates = [];
       const deltas = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      
+
       // Get all player positions to avoid collisions
       const playerPositions = new Set();
       this.players.forEach(p => {
         playerPositions.add(`${p.x},${p.y}`);
       });
-      
+
       for (const [dx, dy] of deltas) {
         const nx = ax + dx, ny = ay + dy;
         if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
-        
+
         // Can only move into floor tiles (cannot push or move into pumps/droplets/aliens/players)
         if (this.map[ny] && this.map[ny][nx] === '.' && !playerPositions.has(`${nx},${ny}`)) {
           // Also check if another alien is at this position
@@ -514,7 +518,7 @@ class GameRoom {
       this.updateGameLogic();
       this.broadcastState();
     }, 1000 / TICK_RATE);
-    
+
     // Separate timer for alien movement (slower than game loop)
     this.alienTimer = setInterval(() => {
       this.stepAliens();
@@ -579,42 +583,42 @@ wss.on('connection', (ws, req) => {
         const roomId = data.roomId || 'default';
         playerId = generatePlayerId();
         currentRoom = getOrCreateRoom(roomId);
-        
+
         console.log(`Player ${playerId} joined room ${roomId}`);
-        
+
         // Add player to room
         currentRoom.addPlayer(playerId, ws);
 
         // Send initialization data
         const player = currentRoom.players.get(playerId);
         ws.send(JSON.stringify({
-            type: 'init',
-            playerId,
-            gameState: {
-              ...currentRoom.gameState,
-              aliens: currentRoom.aliens.map(a => ({ x: a.x, y: a.y })),
-              players: Array.from(currentRoom.players.values()).map(p => ({
-                id: p.id,
-                x: p.x,
-                y: p.y,
-                color: p.color,
-                bombs: p.bombs,
-                oxygen: p.oxygen,
-                jumps: p.jumps
-              })),
-              boxes: currentRoom.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),
-              bombs: currentRoom.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn }))
-            },
-            map: currentRoom.map,
-            width: currentRoom.width,
-            height: currentRoom.height,
-            playerX: player.x,
-            playerY: player.y,
-            playerColor: player.color,
-            playerBombs: player.bombs,
-            playerOxygen: player.oxygen,
-            playerJumps: player.jumps,
-            chatHistory: currentRoom.chatHistory // Send chat history to new player
+          type: 'init',
+          playerId,
+          gameState: {
+            ...currentRoom.gameState,
+            aliens: currentRoom.aliens.map(a => ({ x: a.x, y: a.y })),
+            players: Array.from(currentRoom.players.values()).map(p => ({
+              id: p.id,
+              x: p.x,
+              y: p.y,
+              color: p.color,
+              bombs: p.bombs,
+              oxygen: p.oxygen,
+              jumps: p.jumps
+            })),
+            boxes: currentRoom.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),
+            bombs: currentRoom.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn }))
+          },
+          map: currentRoom.map,
+          width: currentRoom.width,
+          height: currentRoom.height,
+          playerX: player.x,
+          playerY: player.y,
+          playerColor: player.color,
+          playerBombs: player.bombs,
+          playerOxygen: player.oxygen,
+          playerJumps: player.jumps,
+          chatHistory: currentRoom.chatHistory // Send chat history to new player
         }));
 
         // Notify others in room
@@ -629,7 +633,7 @@ wss.on('connection', (ws, req) => {
           }
         };
         currentRoom.broadcast(joinMessage, ws);
-        
+
         // Add join notification to chat history
         currentRoom.chatHistory.push({
           type: 'system',
@@ -655,14 +659,14 @@ wss.on('connection', (ws, req) => {
             playerColor: player.color,
             timestamp: Date.now()
           };
-          
+
           // Store in chat history
           currentRoom.chatHistory.push(chatMessage);
           // Keep only last maxChatHistory messages
           if (currentRoom.chatHistory.length > currentRoom.maxChatHistory) {
             currentRoom.chatHistory.shift();
           }
-          
+
           // Broadcast chat message to all players in room
           currentRoom.broadcast(chatMessage);
         }
@@ -682,12 +686,12 @@ wss.on('connection', (ws, req) => {
     if (currentRoom && playerId) {
       console.log(`Player ${playerId} left room ${currentRoom.roomId}`);
       currentRoom.removePlayer(playerId);
-      
+
       currentRoom.broadcast({
         type: 'playerLeft',
         playerId: playerId
       });
-      
+
       // Add leave notification to chat history
       currentRoom.chatHistory.push({
         type: 'system',
@@ -736,7 +740,7 @@ server.listen(PORT, '0.0.0.0', () => {
 function getLocalIP() {
   const { networkInterfaces } = require('os');
   const nets = networkInterfaces();
-  
+
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
       if (net.family === 'IPv4' && !net.internal) {
