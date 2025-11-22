@@ -235,7 +235,8 @@ class GameRoom {
       oxygen: 200,
       jumps: 1,
       dash: false,
-      maxOxygen: 200
+      maxOxygen: 200,
+      draggedWall: null // {x, y} when dragging a wall
     });
   }
 
@@ -394,6 +395,40 @@ class GameRoom {
     return true;
   }
 
+  // Handle dragging a wall
+  handleDrag(playerId, wallX, wallY, isDragging) {
+    const player = this.players.get(playerId);
+    if (!player) return false;
+
+    if (isDragging) {
+      // Validate wall is adjacent to player
+      const dx = Math.abs(wallX - player.x);
+      const dy = Math.abs(wallY - player.y);
+      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+        // Check if it's a pushable wall
+        if (this.map[wallY] && this.map[wallY][wallX] === TILES.PUSHABLE) {
+          // Check if another player is already dragging this wall
+          let alreadyDragged = false;
+          this.players.forEach((p, pid) => {
+            if (pid !== playerId && p.draggedWall && p.draggedWall.x === wallX && p.draggedWall.y === wallY) {
+              alreadyDragged = true;
+            }
+          });
+
+          if (!alreadyDragged) {
+            player.draggedWall = { x: wallX, y: wallY };
+            return true;
+          }
+        }
+      }
+      return false;
+    } else {
+      // Release drag
+      player.draggedWall = null;
+      return true;
+    }
+  }
+
   handlePlayerInput(playerId, data) {
     const player = this.players.get(playerId);
     if (!player) return;
@@ -405,8 +440,36 @@ class GameRoom {
         const newY = Math.max(0, Math.min(this.height - 1, data.y));
         // Check if the target tile is walkable
         if (this.map[newY] && this.map[newY][newX] !== TILES.WALL) {
+          const oldX = player.x;
+          const oldY = player.y;
+
           player.x = newX;
           player.y = newY;
+
+          // Handle dragged wall movement
+          if (player.draggedWall) {
+            const wallX = player.draggedWall.x;
+            const wallY = player.draggedWall.y;
+
+            // Check if old position is valid for wall placement
+            if (this.map[oldY] && this.map[oldY][oldX] === TILES.FLOOR) {
+              // Move wall from current position to player's old position
+              this.map[wallY][wallX] = TILES.FLOOR;
+              this.map[oldY][oldX] = TILES.PUSHABLE;
+
+              // Update dragged wall coordinates
+              player.draggedWall = { x: oldX, y: oldY };
+
+              // Broadcast map changes
+              this.broadcastMapChange([
+                { x: wallX, y: wallY, tile: TILES.FLOOR },
+                { x: oldX, y: oldY, tile: TILES.PUSHABLE }
+              ]);
+            } else {
+              // Can't place wall, release it
+              player.draggedWall = null;
+            }
+          }
 
           // Auto-collect items when moving onto them
           this.handleCollect(playerId, newX, newY);
@@ -425,6 +488,8 @@ class GameRoom {
           this.handlePush(playerId, data.fromX, data.fromY, data.toX, data.toY);
         } else if (data.action === 'placeBomb') {
           this.handlePlaceBomb(playerId, data.x, data.y);
+        } else if (data.action === 'drag') {
+          this.handleDrag(playerId, data.wallX, data.wallY, data.isDragging);
         } else {
           player.action = data.action;
         }
@@ -539,7 +604,8 @@ class GameRoom {
           oxygen: p.oxygen,
           jumps: p.jumps,
           dash: p.dash,
-          action: p.action
+          action: p.action,
+          draggedWall: p.draggedWall
         })),
         aliens: this.aliens.map(a => ({ x: a.x, y: a.y })),
         boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),

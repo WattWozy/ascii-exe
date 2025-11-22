@@ -251,6 +251,10 @@ class GameClient {
                 dash: myPlayer.dash
               });
             }
+            // Update drag state from server
+            if (this.game.updateDragState) {
+              this.game.updateDragState(myPlayer.draggedWall);
+            }
           }
         }
 

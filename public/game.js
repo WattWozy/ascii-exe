@@ -47,6 +47,9 @@
     // aliens list - managed by server
     let aliens = [];
 
+    // dragging state
+    let draggedWall = null; // {x, y} when player is dragging a wall
+
     // other players list (from server)
     let otherPlayers = [];
     // bombs attached to walls
@@ -110,6 +113,10 @@
       const tile = map[ny][nx];
       if (tile === TILE_WALL) return false;
       if (tile === TILE_PUSH) {
+        // Skip auto-push if this is our dragged wall
+        if (draggedWall && draggedWall.x === nx && draggedWall.y === ny) {
+          return true; // Can walk through dragged wall
+        }
         const pushX = nx + dx, pushY = ny + dy;
         if (pushX < 0 || pushY < 0 || pushX >= width || pushY >= height) return false;
         if (map[pushY][pushX] !== TILE_FLOOR) return false;
@@ -184,6 +191,10 @@
             classes.push('bomb');
             if (b.blinkOn) classes.push('bomb-on');
           }
+          // check if this is the dragged wall
+          if (draggedWall && draggedWall.x === x && draggedWall.y === y) {
+            classes.push('dragging');
+          }
           const disp = (ch === ' ') ? '&nbsp;' : escapeHtml(ch);
           const styleAttr = style ? ` style="${style}"` : '';
           out += `<span class="${classes.join(' ')}"${styleAttr}>${disp}</span>`;
@@ -209,7 +220,7 @@
     }
 
     // input handling
-    const keyMap = { 'ArrowUp': [0, -1], 'ArrowDown': [0, 1], 'ArrowLeft': [-1, 0], 'ArrowRight': [1, 0], 'w': [0, -1], 's': [0, 1], 'a': [-1, 0], 'd': [1, 0] };
+    const keyMap = { 'ArrowUp': [0, -1], 'ArrowDown': [0, 1], 'ArrowLeft': [-1, 0], 'ArrowRight': [1, 0], 'w': [0, -1], 's': [0, 1], 'a': [-1, 0] };
     let lastDir = null;
     let keyHandler = (e) => {
       // Don't process game input if chat is open
@@ -230,6 +241,26 @@
         }
         return;
       }
+      // drag/release wall with 'd' using last direction
+      if (k === 'd') {
+        e.preventDefault();
+        if (draggedWall) {
+          // Release wall
+          draggedWall = null;
+          onAction({ action: 'drag', isDragging: false });
+          render();
+        } else if (lastDir) {
+          // Try to grab wall
+          const wx = player.x + lastDir[0];
+          const wy = player.y + lastDir[1];
+          if (wx >= 0 && wy >= 0 && wx < width && wy < height && map[wy] && map[wy][wx] === TILE_PUSH) {
+            draggedWall = { x: wx, y: wy };
+            onAction({ action: 'drag', wallX: wx, wallY: wy, isDragging: true });
+            render();
+          }
+        }
+        return;
+      }
       if (!keyMap[k]) return;
       e.preventDefault();
       const [dx, dy] = keyMap[k];
@@ -237,9 +268,30 @@
       const nx = player.x + dx, ny = player.y + dy;
 
       if (canWalk(nx, ny, dx, dy)) {
+        // Store old position for dragged wall
+        const oldX = player.x;
+        const oldY = player.y;
+
         // Update local position immediately for responsive feel
         player.x = nx;
         player.y = ny;
+
+        // Move dragged wall to old position
+        if (draggedWall) {
+          const wallX = draggedWall.x;
+          const wallY = draggedWall.y;
+
+          // Check if old position is valid for wall
+          if (map[oldY] && map[oldY][oldX] === TILE_FLOOR) {
+            map[wallY][wallX] = TILE_FLOOR;
+            map[oldY][oldX] = TILE_PUSH;
+            draggedWall = { x: oldX, y: oldY };
+          } else {
+            // Can't place wall, release it
+            draggedWall = null;
+          }
+        }
+
         // decrease oxygen on move
         if (playerState.oxygen > 0) playerState.oxygen--;
         // Send move to server for authoritative sync
@@ -362,11 +414,18 @@
       render();
     }
 
+    // Update drag state from server
+    function updateDragState(serverDraggedWall) {
+      draggedWall = serverDraggedWall;
+      render();
+    }
+
     return {
       start, stop, getState, render,
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
-      applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory
+      applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
+      updateDragState
     };
   }
 
