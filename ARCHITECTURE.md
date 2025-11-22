@@ -182,3 +182,4 @@ The client handles **rendering** and **input**, with **local prediction** for re
 - **Reliability:** Server is authoritative, clients can reconnect and sync
 - **Scalability:** Can add more players without client-side conflicts
 
+
