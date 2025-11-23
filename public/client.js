@@ -272,6 +272,25 @@ class GameClient {
         if (this.game && this.game.updateBombs && data.gameState.bombs) {
           this.game.updateBombs(data.gameState.bombs);
         }
+
+        // Update game phase
+        if (this.game && this.game.updateGamePhase && data.gameState.phase) {
+          this.game.updateGamePhase(data.gameState.phase, data.gameState.winner);
+        }
+        break;
+
+      case 'playerDied':
+        // Handle player death notification
+        const diedPlayer = this.players.get(data.playerId);
+        if (diedPlayer) {
+          diedPlayer.isDead = true;
+          this.addChatMessage(`${window.getPlayerName(data.playerId)} died: ${data.reason}`, true);
+        }
+        break;
+
+      case 'gameOver':
+        // Handle game over notification
+        this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true);
         break;
 
       case 'mapChange':

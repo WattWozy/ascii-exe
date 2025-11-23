@@ -54,6 +54,82 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Game rooms - each room has its own isolated game state
 const rooms = {};
 
+const { GameState, PHASES, MODES, GameModeHandler } = require('./public/gamestate.js');
+
+class SurvivalMode extends GameModeHandler {
+  constructor(gameRoom) {
+    super(gameRoom);
+    this.room = gameRoom;
+  }
+
+  update() {
+    if (this.room.state.phase !== PHASES.PLAYING) return;
+
+    // Check for player deaths
+    this.room.players.forEach(player => {
+      if (player.isDead) return;
+
+      // 1. Oxygen Death
+      if (player.oxygen <= 0) {
+        this.killPlayer(player, 'ran out of oxygen');
+      }
+
+      // 2. Alien Collision Death
+      // Simple check: is any alien on the same tile?
+      const hitByAlien = this.room.aliens.some(alien => alien.x === player.x && alien.y === player.y);
+      if (hitByAlien) {
+        this.killPlayer(player, 'was eaten by an alien');
+      }
+    });
+
+    // Check Win/Loss Condition
+    this.checkWinCondition();
+  }
+
+  killPlayer(player, reason) {
+    if (player.isDead) return;
+    player.isDead = true;
+    console.log(`Player ${player.id} died: ${reason}`);
+
+    this.room.broadcast({
+      type: 'playerDied',
+      playerId: player.id,
+      reason: reason
+    });
+
+    this.room.chatHistory.push({
+      type: 'system',
+      message: `${getPlayerName(player.id)} died: ${reason}`,
+      timestamp: Date.now()
+    });
+  }
+
+  checkWinCondition() {
+    const activePlayers = Array.from(this.room.players.values()).filter(p => !p.isDead);
+    const totalPlayers = this.room.players.size;
+
+    // If everyone is dead
+    if (activePlayers.length === 0 && totalPlayers > 0) {
+      this.room.state.setPhase(PHASES.GAME_OVER);
+      this.room.state.winner = 'Aliens';
+      this.room.broadcast({
+        type: 'gameOver',
+        winner: 'Aliens'
+      });
+    }
+
+    // If all aliens are dead
+    if (this.room.aliens.length === 0) {
+      this.room.state.setPhase(PHASES.GAME_OVER);
+      this.room.state.winner = 'Players';
+      this.room.broadcast({
+        type: 'gameOver',
+        winner: 'Players'
+      });
+    }
+  }
+}
+
 class GameRoom {
   constructor(roomId, settings = {}) {
     this.roomId = roomId;
@@ -66,6 +142,11 @@ class GameRoom {
     this.players = new Map();
     this.width = 40;
     this.height = 20;
+
+    // Initialize Game State
+    this.state = new GameState();
+    this.modeHandler = new SurvivalMode(this);
+
     // Use generateMap if available, otherwise fallback
     try {
       const mapOpts = {
@@ -76,11 +157,6 @@ class GameRoom {
     } catch (e) {
       this.map = generateSimpleMap(this.width, this.height);
     }
-    this.gameState = {
-      // Add your game-specific state here
-      started: false,
-      createdAt: Date.now()
-    };
 
     // Aliens list - managed server-side for synchronization
     this.aliens = [];
@@ -102,6 +178,9 @@ class GameRoom {
 
     // Start the game loop for this room
     this.startGameLoop();
+
+    // Auto-start game when created (for now)
+    this.state.setPhase(PHASES.PLAYING);
   }
 
   // Populate boxes with contents (server-authoritative)
@@ -248,25 +327,30 @@ class GameRoom {
       jumps: 1,
       dash: false,
       maxOxygen: 200,
-      draggedWall: null // {x, y} when dragging a wall
+      draggedWall: null, // {x, y} when dragging a wall
+      isDead: false
     });
   }
 
   removePlayer(playerId) {
     this.players.delete(playerId);
 
-    // Clean up empty rooms after 5 minutes
+    // Clean up empty rooms
     if (this.players.size === 0) {
+      // If game is over, close immediately (or very quickly) so players can restart
+      // Otherwise wait 5 minutes
+      const timeoutDuration = (this.state.phase === PHASES.GAME_OVER) ? 500 : 5 * 60 * 1000;
+
       setTimeout(() => {
         if (this.players.size === 0) {
-          rooms.delete(this.roomId);
+          delete rooms[this.roomId];
           clearInterval(this.gameLoopInterval);
           if (this.alienTimer) {
             clearInterval(this.alienTimer);
           }
           console.log(`Room ${this.roomId} closed (empty)`);
         }
-      }, 5 * 60 * 1000);
+      }, timeoutDuration);
     }
   }
 
@@ -282,7 +366,7 @@ class GameRoom {
   // Handle collecting an item at position
   handleCollect(playerId, x, y) {
     const player = this.players.get(playerId);
-    if (!player) return false;
+    if (!player || player.isDead) return false;
 
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
     if (!this.map[y] || !this.map[y][x]) return false;
@@ -342,7 +426,7 @@ class GameRoom {
   // Handle pushing an object
   handlePush(playerId, fromX, fromY, toX, toY) {
     const player = this.players.get(playerId);
-    if (!player) return false;
+    if (!player || player.isDead) return false;
 
     // Validate push
     if (fromX < 0 || fromY < 0 || fromX >= this.width || fromY >= this.height) return false;
@@ -364,7 +448,7 @@ class GameRoom {
   // Handle placing a bomb
   handlePlaceBomb(playerId, x, y) {
     const player = this.players.get(playerId);
-    if (!player) return false;
+    if (!player || player.isDead) return false;
 
     // Validate
     // Validate using shared logic
@@ -388,6 +472,17 @@ class GameRoom {
           this.map[bomb.y][bomb.x] = TILES.FLOOR;
           const idx = this.bombs.indexOf(bomb);
           if (idx !== -1) this.bombs.splice(idx, 1);
+
+          // Check for aliens in the explosion
+          for (let i = this.aliens.length - 1; i >= 0; i--) {
+            const alien = this.aliens[i];
+            // Simple collision: exact tile match
+            if (alien.x === bomb.x && alien.y === bomb.y) {
+              this.aliens.splice(i, 1);
+              console.log(`Alien killed at ${alien.x},${alien.y}`);
+            }
+          }
+
           this.broadcastMapChange([{ x: bomb.x, y: bomb.y, tile: TILES.FLOOR }]);
         }, bomb.delay);
       } else {
@@ -408,7 +503,7 @@ class GameRoom {
   // Handle dragging a wall
   handleDrag(playerId, wallX, wallY, isDragging) {
     const player = this.players.get(playerId);
-    if (!player) return false;
+    if (!player || player.isDead) return false;
 
     if (isDragging) {
       // Validate wall is adjacent to player
@@ -441,7 +536,7 @@ class GameRoom {
 
   handlePlayerInput(playerId, data) {
     const player = this.players.get(playerId);
-    if (!player) return;
+    if (!player || player.isDead) return;
 
     switch (data.type) {
       case 'move':
@@ -583,9 +678,10 @@ class GameRoom {
   }
 
   updateGameLogic() {
-    // Move aliens (step them periodically)
-    // This will be called by the game loop, but we'll also have a separate timer for aliens
-    // TODO: apply collisions, enemy movement, bombs, rooms etc.
+    // Delegate to mode handler
+    if (this.modeHandler) {
+      this.modeHandler.update();
+    }
   }
 
   startGameLoop() {
@@ -615,12 +711,15 @@ class GameRoom {
           jumps: p.jumps,
           dash: p.dash,
           action: p.action,
-          draggedWall: p.draggedWall
+          draggedWall: p.draggedWall,
+          isDead: p.isDead
         })),
         aliens: this.aliens.map(a => ({ x: a.x, y: a.y })),
         boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),
         bombs: this.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn })),
-        ...this.gameState
+        phase: this.state.phase,
+        winner: this.state.winner,
+        ...this.state.modeState
       },
       timestamp: Date.now()
     };

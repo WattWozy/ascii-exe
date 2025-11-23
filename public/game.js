@@ -175,7 +175,7 @@
           }
           // Then check for aliens
           else if (alienPositions.has(`${x},${y}`)) {
-            ch = '👽';
+            ch = '👾';
             classes.push('alien');
           }
           else if (ch === TILE_FLOOR) { ch = ' '; }
@@ -218,14 +218,100 @@
 
       // Update state menu (removed bombs/oxygen, kept dash/jumps)
       stateMenuEl.textContent = `dash: ${playerState.dash ? 'yes' : 'no'}  jumps: ${playerState.jumps}`;
+
+      screenEl.innerHTML = out;
+
+      // Handle Overlay (Game Over / Death)
+      // We use a separate element and only update when state changes to avoid killing click events
+      const overlayEl = document.getElementById('game-overlay');
+      if (overlayEl) {
+        let targetOverlayState = 'NONE';
+        if (currentPhase === 'GAME_OVER') targetOverlayState = 'GAME_OVER';
+        else if (playerState.isDead) targetOverlayState = 'DEAD';
+
+        // Only update if state changed
+        if (overlayEl.dataset.state !== targetOverlayState) {
+          overlayEl.dataset.state = targetOverlayState;
+
+          if (targetOverlayState === 'NONE') {
+            overlayEl.innerHTML = '';
+          } else if (targetOverlayState === 'GAME_OVER') {
+            const isVictory = winner === 'Players';
+            const color = isVictory ? '#7cd67c' : '#ff6666';
+            const title = isVictory ? 'VICTORY' : 'GAME OVER';
+            const subtext = isVictory ? 'Aliens Eliminated' : 'Aliens Win';
+
+            overlayEl.innerHTML = `<div style="
+              background: rgba(13, 17, 23, 0.95);
+              padding: 32px;
+              border: 2px solid ${color};
+              border-radius: 12px;
+              text-align: center;
+              box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px ${color}40;
+              min-width: 300px;
+              backdrop-filter: blur(4px);
+              pointer-events: auto;
+            ">
+              <h1 style="
+                color: ${color};
+                margin: 0 0 8px 0;
+                font-size: 32px;
+                text-shadow: 0 0 10px ${color}40;
+                letter-spacing: 2px;
+              ">${title}</h1>
+              
+              <p style="
+                color: #aab3c2;
+                margin: 0 0 24px 0;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+              ">${subtext}</p>
+              
+              <button onclick="window.location.href='/'" style="
+                background: rgba(255,255,255,0.05);
+                color: #e8eef6;
+                border: 1px solid rgba(255,255,255,0.1);
+                padding: 12px 24px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-family: inherit;
+                font-size: 16px;
+                transition: all 0.2s;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+              " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+              </button>
+            </div>`;
+          } else if (targetOverlayState === 'DEAD') {
+            overlayEl.innerHTML = `<div style="
+              background: rgba(0, 0, 0, 0.8);
+              padding: 20px;
+              border: 1px solid #666;
+              text-align: center;
+              pointer-events: auto;
+            ">
+              <h2 style="color:#ff6666;margin:0;">YOU DIED</h2>
+              <p style="color:#ccc;margin:5px 0;">Spectating...</p>
+            </div>`;
+          }
+        }
+      }
+      // Ensure screenEl is relative so absolute children work
+      screenEl.style.position = 'relative';
     }
 
     // input handling
     const keyMap = { 'ArrowUp': [0, -1], 'ArrowDown': [0, 1], 'ArrowLeft': [-1, 0], 'ArrowRight': [1, 0], 'w': [0, -1], 's': [0, 1], 'a': [-1, 0] };
     let lastDir = null;
     let keyHandler = (e) => {
-      // Don't process game input if chat is open
-      if (window.gameClient && window.gameClient.chatOpen) {
+      // Don't process game input if chat is open OR if player is dead OR game over
+      if ((window.gameClient && window.gameClient.chatOpen) || playerState.isDead || currentPhase === 'GAME_OVER') {
         return;
       }
 
@@ -412,6 +498,7 @@
       if (inv.oxygen !== undefined) playerState.oxygen = inv.oxygen;
       if (inv.jumps !== undefined) playerState.jumps = inv.jumps;
       if (inv.dash !== undefined) playerState.dash = inv.dash;
+      if (inv.isDead !== undefined) playerState.isDead = inv.isDead;
       render();
     }
 
@@ -421,12 +508,22 @@
       render();
     }
 
+    // Game Phase handling
+    let currentPhase = 'LOBBY';
+    let winner = null;
+
+    function updateGamePhase(phase, win) {
+      currentPhase = phase;
+      winner = win;
+      render();
+    }
+
     return {
       start, stop, getState, render,
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
-      updateDragState
+      updateDragState, updateGamePhase
     };
   }
 
