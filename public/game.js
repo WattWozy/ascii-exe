@@ -126,6 +126,14 @@
         // Optimistically apply locally (server will correct if invalid)
         map[ny][nx] = TILE_FLOOR;
         map[pushY][pushX] = TILE_PUSH;
+
+        // Update entity locally
+        const wall = walls.find(w => w.x === nx && w.y === ny);
+        if (wall) {
+          wall.x = pushX;
+          wall.y = pushY;
+        }
+
         return true;
       }
       return true;
@@ -138,12 +146,7 @@
     function render() {
       let out = '';
       // Create sets for quick lookup
-      const alienPositions = new Set();
-      aliens.forEach(a => {
-        if (a && a.x !== undefined && a.y !== undefined) {
-          alienPositions.add(`${a.x},${a.y}`);
-        }
-      });
+
 
       // Create map of other player positions with their colors
       const otherPlayerMap = new Map();
@@ -160,25 +163,16 @@
           let style = '';
 
           // Check for other players first (they render on top of floor)
-          const otherPlayerAtPos = otherPlayerMap.get(`${x},${y}`);
-          if (otherPlayerAtPos) {
-            ch = TILE_PLAYER;
-            classes.push('other-player');
-            if (otherPlayerAtPos.color) {
-              style = `color: ${otherPlayerAtPos.color};`;
-            }
-          }
+          // REMOVED: Players are now rendered in entity layer
+
           // Then check for local player
-          else if (x === player.x && y === player.y) {
-            ch = TILE_PLAYER;
-            classes.push('player');
+          // REMOVED: Player is now rendered in entity layer
+
+          if (ch === TILE_FLOOR) { ch = ' '; }
+          else if (ch === TILE_PUSH) {
+            // Don't render pushable wall in grid, it's an entity now
+            ch = ' ';
           }
-          // Then check for aliens
-          else if (alienPositions.has(`${x},${y}`)) {
-            ch = '👾';
-            classes.push('alien');
-          }
-          else if (ch === TILE_FLOOR) { ch = ' '; }
           else if (ch === TILE_PUMP) { classes.push('pump'); }
           else if (ch === (mapOpts.boxSymbol || (window.TILES && window.TILES.BOX) || 'Ø')) {
             const box = findBoxAt(x, y);
@@ -372,6 +366,14 @@
           if (map[oldY] && map[oldY][oldX] === TILE_FLOOR) {
             map[wallY][wallX] = TILE_FLOOR;
             map[oldY][oldX] = TILE_PUSH;
+
+            // Update entity locally
+            const wall = walls.find(w => w.x === wallX && w.y === wallY);
+            if (wall) {
+              wall.x = oldX;
+              wall.y = oldY;
+            }
+
             draggedWall = { x: oldX, y: oldY };
           } else {
             // Can't place wall, release it
@@ -385,6 +387,7 @@
         // Server will handle collection automatically when player moves onto items
         onSendMove(nx, ny);
         render();
+        renderEntities();
 
       }
     };
@@ -426,17 +429,123 @@
       }
     }
 
+    // Walls list - managed by server
+    let walls = [];
+
     // Update aliens from server (authoritative)
     function updateAliens(serverAliens) {
       // Update aliens array with server data
-      aliens = serverAliens.map(a => ({ x: a.x, y: a.y }));
-      render();
+      aliens = serverAliens.map(a => ({ id: a.id, x: a.x, y: a.y }));
+      renderEntities();
+    }
+
+    // Update walls from server
+    function updateWalls(serverWalls) {
+      walls = serverWalls.map(w => ({ id: w.id, x: w.x, y: w.y }));
+      renderEntities();
+    }
+
+    function renderEntities() {
+      const layerEl = document.getElementById('entity-layer');
+      if (!layerEl) return;
+
+      // Helper to update/create sprites
+      const updateSprites = (items, typeClass, getContent, getColor, getExtraClass) => {
+        const existing = new Map();
+        layerEl.querySelectorAll(`.${typeClass}`).forEach(el => {
+          existing.set(el.dataset.id, el);
+        });
+
+        const currentIds = new Set();
+
+        items.forEach(item => {
+          const id = String(item.id);
+          currentIds.add(id);
+
+          let el = existing.get(id);
+          const left = `calc(12px + ${item.x} * 1.5ch)`;
+          const top = `calc(12px + ${item.y} * 1.25em)`;
+
+          if (!el) {
+            el = document.createElement('div');
+            el.className = `${typeClass} entering`;
+            el.dataset.id = id;
+            el.textContent = getContent(item);
+            el.style.left = left;
+            el.style.top = top;
+            if (getColor) el.style.color = getColor(item);
+            if (getExtraClass) {
+              const extra = getExtraClass(item);
+              if (extra) el.classList.add(extra);
+            }
+            layerEl.appendChild(el);
+
+            // Trigger reflow
+            el.offsetHeight;
+            el.classList.remove('entering');
+            el.classList.add('visible');
+          } else {
+            el.style.left = left;
+            el.style.top = top;
+            if (getColor) el.style.color = getColor(item);
+
+            // Update extra classes (like dragging)
+            if (getExtraClass) {
+              const extra = getExtraClass(item);
+              // Reset specific classes? For now just add/remove known ones
+              if (extra === 'dragging') el.classList.add('dragging');
+              else el.classList.remove('dragging');
+            }
+
+            if (!el.classList.contains('visible')) {
+              el.classList.add('visible');
+              el.classList.remove('entering');
+            }
+          }
+        });
+
+        // Remove old
+        existing.forEach((el, id) => {
+          if (!currentIds.has(id)) {
+            el.classList.remove('visible');
+            el.classList.add('exiting');
+            setTimeout(() => {
+              if (el.parentNode) el.parentNode.removeChild(el);
+            }, 200);
+          }
+        });
+      };
+
+      // Render Aliens
+      updateSprites(aliens, 'alien-sprite', () => '👾', () => null);
+
+      // Render Walls
+      updateSprites(walls, 'wall-sprite', () => 'o', () => null, (w) => {
+        if (draggedWall && draggedWall.x === w.x && draggedWall.y === w.y) return 'dragging';
+        return null;
+      });
+
+      // Render Players
+      // Combine local player and other players
+      const allPlayers = [];
+      // Local player (use special ID 'me')
+      if (!playerState.isDead) {
+        allPlayers.push({ id: 'me', x: player.x, y: player.y, color: '#7cd67c' });
+      }
+      // Other players
+      otherPlayers.forEach(p => {
+        if (!p.isDead) {
+          allPlayers.push({ id: `p_${p.id}`, x: p.x, y: p.y, color: p.color || '#7cd67c' });
+        }
+      });
+
+      updateSprites(allPlayers, 'player-sprite', () => '@', (p) => p.color);
     }
 
     // Update other players from server
     function updateOtherPlayers(players) {
       otherPlayers = players || [];
-      render();
+      renderEntities();
     }
 
     // Apply map changes from server (authoritative)
@@ -449,6 +558,8 @@
         }
       });
       render();
+      // Also re-render entities as map changes might affect them (e.g. wall destroyed)
+      // Actually walls are separate now, but if a wall is destroyed it should be removed from walls list by server update
     }
 
     // Update boxes from server (authoritative)
@@ -500,12 +611,14 @@
       if (inv.dash !== undefined) playerState.dash = inv.dash;
       if (inv.isDead !== undefined) playerState.isDead = inv.isDead;
       render();
+      renderEntities(); // Re-render to handle death state
     }
 
     // Update drag state from server
     function updateDragState(serverDraggedWall) {
       draggedWall = serverDraggedWall;
       render();
+      renderEntities(); // Re-render to show dragging effect on wall
     }
 
     // Game Phase handling
@@ -523,7 +636,7 @@
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
-      updateDragState, updateGamePhase
+      updateDragState, updateGamePhase, updateWalls
     };
   }
 

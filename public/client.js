@@ -201,6 +201,11 @@ class GameClient {
           this.game.updateBombs(data.gameState.bombs);
         }
 
+        // Set initial walls from server
+        if (data.gameState && data.gameState.walls && this.game.updateWalls) {
+          this.game.updateWalls(data.gameState.walls);
+        }
+
         // Set initial other players if any
         if (data.gameState && data.gameState.players && this.game.updateOtherPlayers) {
           const otherPlayers = data.gameState.players
@@ -266,6 +271,11 @@ class GameClient {
         // Update boxes from server (authoritative)
         if (this.game && this.game.updateBoxes && data.gameState.boxes) {
           this.game.updateBoxes(data.gameState.boxes);
+        }
+
+        // Update walls from server (authoritative)
+        if (this.game && this.game.updateWalls && data.gameState.walls) {
+          this.game.updateWalls(data.gameState.walls);
         }
 
         // Update bombs from server (authoritative)

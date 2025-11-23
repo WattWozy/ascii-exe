@@ -227,6 +227,74 @@
       color: #ff66b2;
     }
 
+    .alien-sprite {
+      position: absolute;
+      width: 1.5ch;
+      height: 1.25em;
+      line-height: 1.25em;
+      text-align: center;
+      transition: all 0.2s ease-in-out;
+      color: #ff66b2;
+      font-size: 22px;
+      font-family: inherit;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .alien-sprite.entering {
+      opacity: 0;
+      transform: scale(0);
+    }
+
+    .alien-sprite.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .alien-sprite.exiting {
+      opacity: 0;
+      transform: scale(0);
+    }
+
+    .player-sprite {
+      position: absolute;
+      width: 1.5ch;
+      height: 1.25em;
+      line-height: 1.25em;
+      text-align: center;
+      transition: all 0.2s ease-in-out;
+      font-weight: bold;
+      font-size: 22px;
+      font-family: inherit;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 20;
+    }
+
+    .wall-sprite {
+      position: absolute;
+      width: 1.5ch;
+      height: 1.25em;
+      line-height: 1.25em;
+      text-align: center;
+      transition: all 0.2s ease-in-out;
+      color: #e8eef6;
+      font-size: 22px;
+      font-family: inherit;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 5;
+    }
+
+    .wall-sprite.dragging {
+      color: #ffaa00;
+      animation: drag-pulse 0.5s ease-in-out infinite alternate;
+    }
+
     #stateMenu {
       color: #e8eef6;
       font-size: 12px;
@@ -355,6 +423,9 @@
     <div id="game-area">
       <div id="screen-wrapper" style="position: relative;">
         <pre id="screen" aria-label="ASCII game screen" tabindex="0"></pre>
+        <div id="entity-layer"
+          style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden;">
+        </div>
         <div id="game-overlay"
           style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; justify-content: center; align-items: center;">
         </div>
