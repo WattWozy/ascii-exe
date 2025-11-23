@@ -360,28 +360,49 @@ class GameClient {
   }
 
   // Join a room
-  joinRoom(roomId) {
+  joinRoom(roomId, settings = {}) {
     if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'joinRoom',
-        roomId: roomId
+        roomId: roomId,
+        settings: settings
       }));
     } else {
       // If not connected yet, wait for connection
       this.ws.addEventListener('open', () => {
         this.ws.send(JSON.stringify({
           type: 'joinRoom',
-          roomId: roomId
+          roomId: roomId,
+          settings: settings
         }));
       }, { once: true });
     }
   }
 }
 
+const urlParams = new URLSearchParams(location.search);
 const roomId =
-  new URLSearchParams(location.search).get("room") ||
+  urlParams.get("room") ||
   localStorage.getItem("currentRoom") ||
   "default";
+
+// Parse settings from SessionStorage (priority) or URL (fallback)
+let settings = {};
+const storedSettings = sessionStorage.getItem('roomSettings');
+if (storedSettings) {
+  try {
+    settings = JSON.parse(storedSettings);
+    // Clear it so it doesn't persist if we reload or join another room via URL later
+    sessionStorage.removeItem('roomSettings');
+  } catch (e) {
+    console.error('Failed to parse stored settings', e);
+  }
+}
+
+// URL params override storage if present (e.g. if clicking a shared link)
+if (urlParams.has("enemies")) settings.enemyCount = parseInt(urlParams.get("enemies"));
+if (urlParams.has("droplets")) settings.dropletCount = parseInt(urlParams.get("droplets"));
+if (urlParams.has("boxes")) settings.boxCount = parseInt(urlParams.get("boxes"));
 
 localStorage.setItem("currentRoom", roomId);
 // Initialize the client
@@ -389,7 +410,7 @@ const gameClient = new GameClient();
 // Expose to window for debugging/access
 window.gameClient = gameClient;
 // Join room (will wait for connection if needed)
-gameClient.joinRoom(roomId);
+gameClient.joinRoom(roomId, settings);
 
 // Example usage in your game loop:
 // gameClient.sendMove(playerX, playerY);

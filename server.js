@@ -55,14 +55,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 const rooms = {};
 
 class GameRoom {
-  constructor(roomId) {
+  constructor(roomId, settings = {}) {
     this.roomId = roomId;
+    this.settings = {
+      dropletCount: settings.dropletCount !== undefined ? settings.dropletCount : 5,
+      boxCount: settings.boxCount !== undefined ? settings.boxCount : 5,
+      enemyCount: settings.enemyCount !== undefined ? settings.enemyCount : 3
+    };
+    console.log(`[Room ${roomId}] Created with settings:`, this.settings);
     this.players = new Map();
     this.width = 40;
     this.height = 20;
     // Use generateMap if available, otherwise fallback
     try {
-      this.map = (typeof generateMap === 'function') ? generateMap(this.width, this.height) : generateSimpleMap(this.width, this.height);
+      const mapOpts = {
+        dropletCount: this.settings.dropletCount,
+        boxCount: this.settings.boxCount
+      };
+      this.map = (typeof generateMap === 'function') ? generateMap(this.width, this.height, mapOpts) : generateSimpleMap(this.width, this.height);
     } catch (e) {
       this.map = generateSimpleMap(this.width, this.height);
     }
@@ -88,7 +98,7 @@ class GameRoom {
     this.maxChatHistory = 100; // Limit to last 100 messages
 
     // Spawn initial aliens
-    this.spawnAliens(3);
+    this.spawnAliens(this.settings.enemyCount);
 
     // Start the game loop for this room
     this.startGameLoop();
@@ -629,9 +639,9 @@ class GameRoom {
 }
 
 // Get or create a room
-function getOrCreateRoom(roomId) {
+function getOrCreateRoom(roomId, settings = {}) {
   if (!rooms[roomId]) {
-    rooms[roomId] = new GameRoom(roomId);
+    rooms[roomId] = new GameRoom(roomId, settings);
   }
   return rooms[roomId];
 }
@@ -648,8 +658,9 @@ wss.on('connection', (ws, req) => {
       // Handle room join
       if (data.type === 'joinRoom') {
         const roomId = data.roomId || 'default';
+        const settings = data.settings || {};
         playerId = generatePlayerId();
-        currentRoom = getOrCreateRoom(roomId);
+        currentRoom = getOrCreateRoom(roomId, settings);
 
         console.log(`Player ${playerId} joined room ${roomId}`);
 

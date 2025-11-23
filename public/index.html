@@ -144,6 +144,27 @@
         </pre>
 
         <div class="menu">
+            <div class="settings-section" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <label for="enemyCount"
+                        style="font-size: 10px; color: var(--dim-color); margin-bottom: 4px;">ENEMIES</label>
+                    <input type="number" id="enemyCount" value="3" min="0" max="20"
+                        style="width: 60px; text-align: center;">
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <label for="dropletCount"
+                        style="font-size: 10px; color: var(--dim-color); margin-bottom: 4px;">OXYGEN</label>
+                    <input type="number" id="dropletCount" value="5" min="0" max="50"
+                        style="width: 60px; text-align: center;">
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <label for="boxCount"
+                        style="font-size: 10px; color: var(--dim-color); margin-bottom: 4px;">BOXES</label>
+                    <input type="number" id="boxCount" value="5" min="0" max="50"
+                        style="width: 60px; text-align: center;">
+                </div>
+            </div>
+
             <button class="btn" onclick="startNewGame()">> Start New Game</button>
 
             <div class="join-section">
@@ -166,6 +187,18 @@
 
         function startNewGame() {
             const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
+            const enemies = document.getElementById('enemyCount').value;
+            const droplets = document.getElementById('dropletCount').value;
+            const boxes = document.getElementById('boxCount').value;
+
+            // Store settings in session storage to keep URL clean
+            const settings = {
+                enemyCount: parseInt(enemies),
+                dropletCount: parseInt(droplets),
+                boxCount: parseInt(boxes)
+            };
+            sessionStorage.setItem('roomSettings', JSON.stringify(settings));
+
             window.location.href = `game.html?room=${randomId}`;
         }
 
