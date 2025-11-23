@@ -22,9 +22,7 @@
       boxSymbol: TILES.BOX,
       bombCount: 5,
       bombSymbol: TILES.BOMB,
-      boxSymbol: TILES.BOX,
-      bombCount: 5,
-      bombSymbol: TILES.BOMB,
+
       dropletCount: 5,
       dropletSymbol: TILES.DROPLET,
       holeMidpoints: true

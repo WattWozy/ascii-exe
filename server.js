@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const { TILES } = require('./public/constants.js');
+const { getPlayerName, findBoxAt, findBombAt, canPlaceBomb, isWalkable } = require('./public/utils.js');
 
 // Simple map generator for server
 function generateSimpleMap(width, height) {
@@ -109,13 +110,14 @@ class GameRoom {
   }
 
   // Find box at position
+  // Uses shared utility
   findBoxAt(x, y) {
-    return this.boxes.find(b => b.x === x && b.y === y);
+    return findBoxAt(this.boxes, x, y);
   }
 
   // Find bomb at position
   findBombAt(x, y) {
-    return this.bombs.find(b => b.x === x && b.y === y);
+    return findBombAt(this.bombs, x, y);
   }
 
   // Generate a random light color (pastel/light colors)
@@ -355,10 +357,8 @@ class GameRoom {
     if (!player) return false;
 
     // Validate
-    if (player.bombs <= 0) return false;
-    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
-    if (!this.map[y] || this.map[y][x] !== TILES.WALL) return false; // Must be a wall
-    if (this.findBombAt(x, y)) return false; // Already a bomb here
+    // Validate using shared logic
+    if (!canPlaceBomb(this.map, this.bombs, x, y, this.width, this.height, TILES.WALL)) return false;
 
     // Place bomb
     player.bombs -= 1;
@@ -438,8 +438,8 @@ class GameRoom {
         // Clamp to map bounds (tile-based coordinates)
         const newX = Math.max(0, Math.min(this.width - 1, data.x));
         const newY = Math.max(0, Math.min(this.height - 1, data.y));
-        // Check if the target tile is walkable
-        if (this.map[newY] && this.map[newY][newX] !== TILES.WALL) {
+        // Check if the target tile is walkable using shared logic
+        if (isWalkable(this.map, newX, newY, this.width, this.height, TILES.WALL)) {
           const oldX = player.x;
           const oldY = player.y;
 
@@ -776,13 +776,7 @@ function generatePlayerId() {
   return `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Extract player name from player ID (last part after underscore)
-function getPlayerName(playerId) {
-  if (!playerId) return 'unknown';
-  const parts = playerId.split('_');
-  // Return last part (the hash), or fallback to last 8 chars if format is unexpected
-  return parts.length > 2 ? parts[parts.length - 1] : playerId.substring(playerId.length - 8);
-}
+
 
 // API endpoint to get room info (optional, for debugging)
 app.get('/api/rooms', (req, res) => {

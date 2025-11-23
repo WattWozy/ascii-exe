@@ -57,19 +57,19 @@
     // boxes placed on the map; each box holds a single collectable: 'bomb' or 'oxygen'
     const boxes = [];
 
+    // CLIENT-SIDE PREDICTION HELPERS
+    // Uses shared utility functions from utils.js
     function findBoxAt(x, y) {
-      return boxes.find(b => b.x === x && b.y === y);
+      return window.findBoxAt(boxes, x, y);
     }
 
     function findBombAt(x, y) {
-      return bombs.find(b => b.x === x && b.y === y);
+      return window.findBombAt(bombs, x, y);
     }
 
     function placeBombAt(x, y) {
-      // do not place if already a bomb here
-      if (findBombAt(x, y)) return false;
-      // must be a wall
-      if (map[y][x] !== TILE_WALL) return false;
+      // Use shared validation
+      if (!window.canPlaceBomb(map, bombs, x, y, width, height, TILE_WALL)) return false;
       if (playerState.bombs <= 0) return false;
 
       // Send bomb placement to server
@@ -109,9 +109,10 @@
     }
     // movement helpers
     function canWalk(nx, ny, dx = 0, dy = 0) {
-      if (nx < 0 || ny < 0 || nx >= width || ny >= height) return false;
+      // Use shared validation for basic walkability
+      if (!window.isWalkable(map, nx, ny, width, height, TILE_WALL)) return false;
+
       const tile = map[ny][nx];
-      if (tile === TILE_WALL) return false;
       if (tile === TILE_PUSH) {
         // Skip auto-push if this is our dragged wall
         if (draggedWall && draggedWall.x === nx && draggedWall.y === ny) {

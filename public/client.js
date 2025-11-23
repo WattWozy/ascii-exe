@@ -9,13 +9,7 @@ class GameClient {
     this.initChat();
   }
 
-  // Extract player name from player ID (last part after underscore)
-  getPlayerName(playerId) {
-    if (!playerId) return 'unknown';
-    const parts = playerId.split('_');
-    // Return last part (the hash), or fallback to last 8 chars if format is unexpected
-    return parts.length > 2 ? parts[parts.length - 1] : playerId.substring(playerId.length - 8);
-  }
+
 
   initChat() {
     const chatInput = document.getElementById('chat-input');
@@ -302,7 +296,7 @@ class GameClient {
         // Show in chat
         const joinedPlayer = this.players.get(data.player.id);
         if (joinedPlayer && joinedPlayer.id !== this.playerId) {
-          this.addChatMessage(`${this.getPlayerName(joinedPlayer.id)} joined the room`, true);
+          this.addChatMessage(`${window.getPlayerName(joinedPlayer.id)} joined the room`, true);
         }
 
         // Update other players display
