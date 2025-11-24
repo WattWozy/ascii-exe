@@ -242,7 +242,10 @@ class GameClient {
           if (myPlayer) {
             this.game.updatePlayerPosition(myPlayer.x, myPlayer.y);
             // Update inventory from server
-            if (this.game.updateInventory) {
+            if (this.game.updateInventory && data.inventory) {
+              this.game.updateInventory(data.inventory);
+            } else if (this.game.updateInventory) {
+              // Fallback (legacy)
               this.game.updateInventory({
                 bombs: myPlayer.bombs,
                 oxygen: myPlayer.oxygen,

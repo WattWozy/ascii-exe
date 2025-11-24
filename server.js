@@ -294,6 +294,204 @@ class RobBankMode extends GameModeHandler {
   }
 }
 
+class CaptureTheFlagMode extends GameModeHandler {
+  constructor(gameRoom) {
+    super(gameRoom);
+    this.room = gameRoom;
+    this.scores = { RED: 0, BLUE: 0 };
+    this.flags = {
+      RED: { x: 0, y: 0, carrier: null, home: { x: 0, y: 0 } },
+      BLUE: { x: 0, y: 0, carrier: null, home: { x: 0, y: 0 } }
+    };
+    this.winScore = 3;
+  }
+
+  init() {
+    // Place Bases and Flags
+    // Red Base (Top Leftish)
+    this.flags.RED.home = { x: 2, y: 2 };
+    this.flags.RED.x = 2;
+    this.flags.RED.y = 2;
+    this.room.map[2][2] = TILES.FLAG_RED;
+    this.room.map[2][1] = TILES.BASE_RED; // Base marker next to flag
+
+    // Blue Base (Bottom Rightish)
+    const bx = this.room.width - 3;
+    const by = this.room.height - 3;
+    this.flags.BLUE.home = { x: bx, y: by };
+    this.flags.BLUE.x = bx;
+    this.flags.BLUE.y = by;
+    this.room.map[by][bx] = TILES.FLAG_BLUE;
+    this.room.map[by][bx - 1] = TILES.BASE_BLUE;
+
+    this.room.broadcastMapChange([
+      { x: 2, y: 2, tile: TILES.FLAG_RED },
+      { x: 2, y: 1, tile: TILES.BASE_RED },
+      { x: bx, y: by, tile: TILES.FLAG_BLUE },
+      { x: bx, y: by - 1, tile: TILES.BASE_BLUE }
+    ]);
+  }
+
+  onPlayerJoin(player) {
+    // Assign Team
+    const redCount = Array.from(this.room.players.values()).filter(p => p.team === 'RED').length;
+    const blueCount = Array.from(this.room.players.values()).filter(p => p.team === 'BLUE').length;
+
+    player.team = redCount <= blueCount ? 'RED' : 'BLUE';
+    player.color = player.team === 'RED' ? '#ff4444' : '#4444ff';
+
+    this.room.broadcast({
+      type: 'chat',
+      message: `${getPlayerName(player.id)} joined team ${player.team}`,
+      playerId: null // System message
+    });
+  }
+
+  update() {
+    if (this.room.state.phase !== PHASES.PLAYING) return;
+
+    // Check win condition
+    if (this.scores.RED >= this.winScore) this.endGame('RED');
+    if (this.scores.BLUE >= this.winScore) this.endGame('BLUE');
+  }
+
+  handleMove(player, newX, newY) {
+    if (!player.team) return;
+
+    const enemyTeam = player.team === 'RED' ? 'BLUE' : 'RED';
+    const enemyFlag = this.flags[enemyTeam];
+    const myFlag = this.flags[player.team];
+
+    // 1. Pick up enemy flag
+    if (!enemyFlag.carrier && newX === enemyFlag.x && newY === enemyFlag.y) {
+      enemyFlag.carrier = player.id;
+      // Remove flag from map
+      this.room.map[newY][newX] = TILES.FLOOR; // Or base tile if at home
+      this.room.broadcastMapChange([{ x: newX, y: newY, tile: TILES.FLOOR }]);
+
+      this.room.broadcast({
+        type: 'chat',
+        message: `${getPlayerName(player.id)} picked up the ${enemyTeam} flag!`,
+        playerId: null
+      });
+    }
+
+    // 2. Capture flag (bring enemy flag to my base)
+    // Check if at my base (simple check: near my flag's home)
+    const distToHome = Math.abs(newX - myFlag.home.x) + Math.abs(newY - myFlag.home.y);
+    if (enemyFlag.carrier === player.id && distToHome <= 1) {
+      // Capture!
+      this.scores[player.team]++;
+      enemyFlag.carrier = null;
+      enemyFlag.x = enemyFlag.home.x;
+      enemyFlag.y = enemyFlag.home.y;
+
+      // Restore flag on map
+      this.room.map[enemyFlag.y][enemyFlag.x] = enemyTeam === 'RED' ? TILES.FLAG_RED : TILES.FLAG_BLUE;
+      this.room.broadcastMapChange([{ x: enemyFlag.x, y: enemyFlag.y, tile: this.room.map[enemyFlag.y][enemyFlag.x] }]);
+
+      this.room.broadcast({
+        type: 'chat',
+        message: `${getPlayerName(player.id)} captured the ${enemyTeam} flag! Score: RED ${this.scores.RED} - BLUE ${this.scores.BLUE}`,
+        playerId: null
+      });
+    }
+  }
+
+  killPlayer(player, reason) {
+    if (player.isDead) return;
+    player.isDead = true;
+
+    // Drop flag if carrying
+    ['RED', 'BLUE'].forEach(team => {
+      if (this.flags[team].carrier === player.id) {
+        this.flags[team].carrier = null;
+        // Return to home immediately (simple rule)
+        this.flags[team].x = this.flags[team].home.x;
+        this.flags[team].y = this.flags[team].home.y;
+
+        const tile = team === 'RED' ? TILES.FLAG_RED : TILES.FLAG_BLUE;
+        this.room.map[this.flags[team].y][this.flags[team].x] = tile;
+        this.room.broadcastMapChange([{ x: this.flags[team].x, y: this.flags[team].y, tile: tile }]);
+
+        this.room.broadcast({
+          type: 'chat',
+          message: `${team} flag returned to base!`,
+          playerId: null
+        });
+      }
+    });
+
+    this.room.broadcast({
+      type: 'playerDied',
+      playerId: player.id,
+      reason: reason
+    });
+  }
+
+  endGame(winnerTeam) {
+    this.room.state.setPhase(PHASES.GAME_OVER);
+    this.room.state.winner = winnerTeam;
+    this.room.broadcast({
+      type: 'gameOver',
+      winner: winnerTeam + ' Team'
+    });
+  }
+}
+
+class KingOfTheHillMode extends GameModeHandler {
+  constructor(gameRoom) {
+    super(gameRoom);
+    this.room = gameRoom;
+    this.scores = {}; // playerId -> score
+    this.hill = { x: 0, y: 0, width: 3, height: 3 };
+    this.winScore = 1000; // Ticks
+  }
+
+  init() {
+    // Create Hill in center
+    const cx = Math.floor(this.room.width / 2) - 1;
+    const cy = Math.floor(this.room.height / 2) - 1;
+    this.hill = { x: cx, y: cy, width: 3, height: 3 };
+
+    const changes = [];
+    for (let y = cy; y < cy + 3; y++) {
+      for (let x = cx; x < cx + 3; x++) {
+        if (y >= 0 && y < this.room.height && x >= 0 && x < this.room.width) {
+          this.room.map[y][x] = TILES.HILL;
+          changes.push({ x, y, tile: TILES.HILL });
+        }
+      }
+    }
+    this.room.broadcastMapChange(changes);
+  }
+
+  update() {
+    if (this.room.state.phase !== PHASES.PLAYING) return;
+
+    // Check players on hill
+    this.room.players.forEach(player => {
+      if (player.isDead) return;
+
+      if (player.x >= this.hill.x && player.x < this.hill.x + this.hill.width &&
+        player.y >= this.hill.y && player.y < this.hill.y + this.hill.height) {
+
+        this.scores[player.id] = (this.scores[player.id] || 0) + 1;
+
+        // Check win
+        if (this.scores[player.id] >= this.winScore) {
+          this.room.state.setPhase(PHASES.GAME_OVER);
+          this.room.state.winner = getPlayerName(player.id);
+          this.room.broadcast({
+            type: 'gameOver',
+            winner: getPlayerName(player.id)
+          });
+        }
+      }
+    });
+  }
+}
+
 class GameRoom {
   constructor(roomId, settings = {}) {
     this.roomId = roomId;
@@ -315,6 +513,12 @@ class GameRoom {
     switch (this.settings.gameMode) {
       case MODES.ROB_BANK:
         this.modeHandler = new RobBankMode(this);
+        break;
+      case MODES.CAPTURE_FLAG:
+        this.modeHandler = new CaptureTheFlagMode(this);
+        break;
+      case MODES.KING_HILL:
+        this.modeHandler = new KingOfTheHillMode(this);
         break;
       case MODES.SURVIVAL:
       default:
@@ -365,6 +569,21 @@ class GameRoom {
 
     // Auto-start game when created (for now)
     this.state.setPhase(PHASES.PLAYING);
+
+    // Cleanup timer
+    this.cleanupTimer = null;
+    this._resetCleanupTimer();
+  }
+
+  _resetCleanupTimer() {
+    if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
+    this.cleanupTimer = setTimeout(() => {
+      if (this.players.size === 0) {
+        console.log(`Room ${this.roomId} closed (empty)`);
+        this._stopGameLoop();
+        delete rooms[this.roomId];
+      }
+    }, 10000); // 10 seconds
   }
 
   // Identify pushable walls and assign IDs
@@ -512,7 +731,7 @@ class GameRoom {
     // Generate a random light color for this player
     const color = this._generatePlayerColor();
 
-    this.players.set(playerId, {
+    const player = {
       id: playerId,
       ws: ws,
       x: spawnPos.x,
@@ -526,11 +745,29 @@ class GameRoom {
       maxOxygen: 200,
       draggedWall: null, // {x, y} when dragging a wall
       isDead: false
-    });
+    };
+
+    this.players.set(playerId, player);
+
+    // Mode-specific join logic (e.g. team assignment)
+    if (this.modeHandler && this.modeHandler.onPlayerJoin) {
+      this.modeHandler.onPlayerJoin(player);
+    }
+
+    // Reset cleanup timer since a player joined
+    if (this.cleanupTimer) {
+      clearTimeout(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
   }
 
   removePlayer(playerId) {
     this.players.delete(playerId);
+
+    // If room is empty, start cleanup timer
+    if (this.players.size === 0) {
+      this._resetCleanupTimer();
+    }
 
     // Clean up empty rooms
     if (this.players.size === 0) {
@@ -911,6 +1148,37 @@ class GameRoom {
     }
   }
 
+  _getModeStatus(player) {
+    if (!this.modeHandler) return null;
+
+    if (this.modeHandler instanceof RobBankMode) {
+      return {
+        type: 'ROB_BANK',
+        collected: this.modeHandler.collectedGold,
+        total: this.modeHandler.totalGold,
+        held: player.gold || 0
+      };
+    } else if (this.modeHandler instanceof CaptureTheFlagMode) {
+      return {
+        type: 'CAPTURE_FLAG',
+        scores: this.modeHandler.scores,
+        myTeam: player.team
+      };
+    } else if (this.modeHandler instanceof KingOfTheHillMode) {
+      // Convert player IDs to names for display
+      const namedScores = {};
+      for (const [pid, score] of Object.entries(this.modeHandler.scores)) {
+        namedScores[getPlayerName(pid)] = score;
+      }
+      return {
+        type: 'KING_HILL',
+        scores: namedScores,
+        myScore: this.modeHandler.scores[player.id] || 0
+      };
+    }
+    return null;
+  }
+
   _startGameLoop() {
     const TICK_RATE = 60;
     this.gameLoopInterval = setInterval(() => {
@@ -924,8 +1192,13 @@ class GameRoom {
     }, this.alienTickMs);
   }
 
+  _stopGameLoop() {
+    if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
+    if (this.alienTimer) clearInterval(this.alienTimer);
+  }
+
   _broadcastState() {
-    const state = {
+    const stateUpdate = {
       type: 'stateUpdate',
       gameState: {
         players: Array.from(this.players.values()).map(p => ({
@@ -933,26 +1206,40 @@ class GameRoom {
           x: p.x,
           y: p.y,
           color: p.color,
-          bombs: p.bombs,
-          oxygen: p.oxygen,
-          jumps: p.jumps,
-          dash: p.dash,
-          action: p.action,
-          draggedWall: p.draggedWall,
-          isDead: p.isDead
+          isDead: p.isDead,
+          action: p.action, // Include action for all players
+          draggedWall: p.draggedWall // Include draggedWall for all players
         })),
         aliens: this.aliens.map(a => ({ id: a.id, x: a.x, y: a.y })),
-        walls: this.pushableWalls.map(w => ({ id: w.id, x: w.x, y: w.y })),
-        boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),
+        walls: this.pushableWalls.map(w => ({ id: w.id, x: w.x, y: w.y })), // Send walls as entities
+        boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })), // Include boxes
         bombs: this.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn })),
-        phase: this.state.phase,
-        winner: this.state.winner,
-        ...this.state.modeState
+        phase: this.state.phase, // Include game phase
+        winner: this.state.winner, // Include winner
+        ...this.state.modeState // Include general mode state
       },
       timestamp: Date.now()
     };
 
-    this.broadcast(state);
+    // Send to each player
+    this.players.forEach(player => {
+      if (player.ws.readyState === WebSocket.OPEN) {
+        // Personalize update (inventory and mode status)
+        const personalUpdate = {
+          ...stateUpdate,
+          inventory: {
+            bombs: player.bombs,
+            oxygen: player.oxygen,
+            jumps: player.jumps,
+            dash: player.dash,
+            isDead: player.isDead,
+            // Add Mode Status
+            modeStatus: this._getModeStatus(player)
+          }
+        };
+        player.ws.send(JSON.stringify(personalUpdate));
+      }
+    });
   }
 
   broadcast(message, excludeWs = null) {

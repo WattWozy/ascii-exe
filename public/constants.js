@@ -9,7 +9,12 @@
         BOX: 'Ø',
         BOMB: 'B',
         GOLD: '€',
-        BANK: '$'
+        BANK: '$',
+        FLAG_RED: 'P',
+        FLAG_BLUE: 'p',
+        BASE_RED: '[',
+        BASE_BLUE: ']',
+        HILL: 'H'
     };
 
     const ITEM_INFO = {

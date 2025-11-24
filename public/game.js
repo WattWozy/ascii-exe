@@ -21,6 +21,11 @@
       TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '•',
       TILE_GOLD = (window.TILES && window.TILES.GOLD) || '€',
       TILE_BANK = (window.TILES && window.TILES.BANK) || '$',
+      TILE_FLAG_RED = (window.TILES && window.TILES.FLAG_RED) || 'P',
+      TILE_FLAG_BLUE = (window.TILES && window.TILES.FLAG_BLUE) || 'p',
+      TILE_BASE_RED = (window.TILES && window.TILES.BASE_RED) || '[',
+      TILE_BASE_BLUE = (window.TILES && window.TILES.BASE_BLUE) || ']',
+      TILE_HILL = (window.TILES && window.TILES.HILL) || 'H',
       PUMP_VALUE_DEFAULT = 25,
       playExitAnimation, generateMap,
       // new callbacks (client supplies these). fall back to no-ops that try window.gameClient if present
@@ -144,6 +149,11 @@
           else if (ch === TILE_DROPLET) { classes.push('droplet'); }
           else if (ch === TILE_GOLD) { classes.push('gold'); }
           else if (ch === TILE_BANK) { classes.push('bank'); }
+          else if (ch === TILE_FLAG_RED) { classes.push('flag-red'); }
+          else if (ch === TILE_FLAG_BLUE) { classes.push('flag-blue'); }
+          else if (ch === TILE_BASE_RED) { classes.push('base-red'); }
+          else if (ch === TILE_BASE_BLUE) { classes.push('base-blue'); }
+          else if (ch === TILE_HILL) { classes.push('hill'); }
           // check bombs to color the wall if attached
           const b = findBombAt(x, y);
           if (b) {
@@ -534,8 +544,103 @@
       if (inv.jumps !== undefined) playerState.jumps = inv.jumps;
       if (inv.dash !== undefined) playerState.dash = inv.dash;
       if (inv.isDead !== undefined) playerState.isDead = inv.isDead;
+
+      // Handle Mode Status if present
+      if (inv.modeStatus) {
+        console.log('Received mode status:', inv.modeStatus);
+        updateModeStatus(inv.modeStatus);
+      }
+
       render();
       renderEntities(); // Re-render to handle death state
+    }
+
+    function updateModeStatus(status) {
+      const container = document.getElementById('mode-status-container');
+      const content = document.getElementById('mode-stats-content');
+      const title = document.getElementById('mode-title');
+
+      if (!container || !content) {
+        console.error('Mode status container missing');
+        return;
+      }
+
+      container.style.display = 'flex';
+      console.log('Updating mode status display for', status.type);
+
+      let html = '';
+      if (status.type === 'ROB_BANK') {
+        title.textContent = 'ROB THE BANK';
+        html += `
+          <div class="stat-row">
+            <div class="stat-label">
+              <span>COLLECTED</span>
+              <span class="stat-value" style="color:#ffd700">${status.collected}/${status.total}</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" style="width:${(status.collected / status.total) * 100}%; background:#ffd700"></div>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">
+              <span>HELD</span>
+              <span class="stat-value">${status.held}</span>
+            </div>
+          </div>
+        `;
+      } else if (status.type === 'CAPTURE_FLAG') {
+        title.textContent = 'CAPTURE THE FLAG';
+        html += `
+          <div class="stat-row">
+            <div class="stat-label">
+              <span style="color:#ff4444">RED TEAM</span>
+              <span class="stat-value">${status.scores.RED}</span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">
+              <span style="color:#4444ff">BLUE TEAM</span>
+              <span class="stat-value">${status.scores.BLUE}</span>
+            </div>
+          </div>
+          <div class="stat-row" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px;">
+             <div class="stat-label">
+              <span>YOUR TEAM</span>
+              <span class="stat-value" style="color:${status.myTeam === 'RED' ? '#ff4444' : '#4444ff'}">${status.myTeam}</span>
+            </div>
+          </div>
+        `;
+      } else if (status.type === 'KING_HILL') {
+        title.textContent = 'KING OF THE HILL';
+        // Sort scores
+        const sorted = Object.entries(status.scores).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+        html += `<div class="stat-row"><div class="stat-label"><span>TOP PLAYERS</span></div></div>`;
+
+        sorted.forEach(([name, score]) => {
+          html += `
+            <div class="stat-row">
+              <div class="stat-label">
+                <span>${name}</span>
+                <span class="stat-value">${Math.floor(score / 10)}s</span> <!-- Approx seconds -->
+              </div>
+            </div>
+           `;
+        });
+
+        if (status.myScore !== undefined) {
+          html += `
+            <div class="stat-row" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px;">
+              <div class="stat-label">
+                <span>YOUR TIME</span>
+                <span class="stat-value">${Math.floor(status.myScore / 10)}s</span>
+              </div>
+            </div>
+           `;
+        }
+      }
+
+      content.innerHTML = html;
     }
 
     // Update drag state from server

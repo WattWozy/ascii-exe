@@ -210,6 +210,31 @@
       font-weight: bold;
     }
 
+    .flag-red {
+      color: #ff4444;
+      font-weight: bold;
+    }
+
+    .flag-blue {
+      color: #4444ff;
+      font-weight: bold;
+    }
+
+    .base-red {
+      color: #aa0000;
+      background: rgba(255, 0, 0, 0.1);
+    }
+
+    .base-blue {
+      color: #0000aa;
+      background: rgba(0, 0, 255, 0.1);
+    }
+
+    .hill {
+      color: #ffff00;
+      background: rgba(255, 255, 0, 0.1);
+    }
+
     .bomb-on {
       color: #ff6666;
       font-weight: bold;
@@ -429,6 +454,12 @@
             Depletes with each move. Collect * or •
           </div>
         </div>
+      </div>
+
+      <div id="mode-status-container"
+        style="display:none; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 12px; flex-direction: column; gap: 12px;">
+        <div class="context-title" id="mode-title">MODE STATUS</div>
+        <div id="mode-stats-content"></div>
       </div>
     </div>
     <div id="game-area">
