@@ -1,0 +1,20 @@
+[ ] lock-the-room functionality. 
+[ ] voice-chat functionality.
+[X] predefined maps? rob the bank for example? 
+[ ] semi-defined maps: hardcoded to a limit, randomized to another.
+[ ] important: lock on stuff to drag
+[ ] important: race conditions on knife attacks.
+->
+
+[ ] alien-ai: in enclose mode: aliens must know how to target people.
+    -> can aliens also destroy stuff?
+
+[ ] tag-game: with oxygen
+
+[ ] weapon mode: respawn, point count 1 minute. 
+[ ] ghost mode: 1 is invisible (others can't see more in the map...)
+    -> how to kill the ghost?
+    -> press the button to see him!
+
+[ ] survival mode: the map get's smaller, see the whole map. shooting rockets.
+[ ] instant kill: low visibility killing per team: knife attack. 
