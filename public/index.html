@@ -214,10 +214,19 @@
                 </div>
             </div>
 
-            <button class="btn" onclick="startNewGame()">> Start New Game</button>
+            <div class="mode-selection"
+                style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
+                <div style="color: var(--dim-color); font-size: 12px; letter-spacing: 2px; margin-bottom: 5px;">SELECT
+                    GAME MODE</div>
+                <button class="btn" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
+                <button class="btn" onclick="startNewGame('ROB_BANK')">> ROB THE BANK</button>
+                <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
+                <button class="btn" onclick="startNewGame('KING_HILL')">> KING OF THE HILL</button>
+            </div>
 
             <div class="join-section">
-                <button class="btn" style="min-width: auto;" onclick="joinGame()">Join</button>
+                <button class="btn" style="min-width: auto;" onclick="joinGame()">Join Room</button>
+                <input type="text" id="roomInput" placeholder="Enter Room ID" onkeypress="handleEnter(event)">
             </div>
         </div>
 
@@ -239,7 +248,7 @@
             window.location.href = 'game.html' + window.location.search;
         }
 
-        function startNewGame() {
+        function startNewGame(mode) {
             const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
             const enemies = document.getElementById('enemyCount').value;
             const droplets = document.getElementById('dropletCount').value;
@@ -249,7 +258,8 @@
             const settings = {
                 enemyCount: parseInt(enemies),
                 dropletCount: parseInt(droplets),
-                boxCount: parseInt(boxes)
+                boxCount: parseInt(boxes),
+                gameMode: mode || 'SURVIVAL'
             };
             sessionStorage.setItem('roomSettings', JSON.stringify(settings));
 

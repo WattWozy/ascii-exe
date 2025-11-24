@@ -130,13 +130,178 @@ class SurvivalMode extends GameModeHandler {
   }
 }
 
+class RobBankMode extends GameModeHandler {
+  constructor(gameRoom) {
+    super(gameRoom);
+    this.room = gameRoom;
+    this.goldCount = 0;
+    this.bankLocation = null;
+    this.totalGold = 10; // Target gold to collect
+    this.collectedGold = 0;
+  }
+
+  init() {
+    // Spawn Bank Vault
+    this.spawnBank();
+    // Spawn Gold
+    this.spawnGold(this.totalGold);
+  }
+
+  spawnBank() {
+    // Find a spot for the bank (preferably near center or a specific edge)
+    // For simplicity, let's put it near the center
+    const midX = Math.floor(this.room.width / 2);
+    const midY = Math.floor(this.room.height / 2);
+
+    // Find nearest floor tile
+    let found = false;
+    let radius = 0;
+    while (!found && radius < 10) {
+      for (let y = midY - radius; y <= midY + radius; y++) {
+        for (let x = midX - radius; x <= midX + radius; x++) {
+          if (y >= 0 && y < this.room.height && x >= 0 && x < this.room.width) {
+            if (this.room.map[y][x] === TILES.FLOOR) {
+              this.room.map[y][x] = TILES.BANK;
+              this.bankLocation = { x, y };
+              found = true;
+              break;
+            }
+          }
+        }
+        if (found) break;
+      }
+      radius++;
+    }
+
+    if (this.bankLocation) {
+      this.room.broadcastMapChange([{ x: this.bankLocation.x, y: this.bankLocation.y, tile: TILES.BANK }]);
+    }
+  }
+
+  spawnGold(count) {
+    let placed = 0;
+    let attempts = 0;
+    const maxAttempts = 1000;
+
+    while (placed < count && attempts < maxAttempts) {
+      attempts++;
+      const x = Math.floor(Math.random() * (this.room.width - 2)) + 1;
+      const y = Math.floor(Math.random() * (this.room.height - 2)) + 1;
+
+      if (this.room.map[y][x] === TILES.FLOOR) {
+        this.room.map[y][x] = TILES.GOLD;
+        placed++;
+      }
+    }
+
+    // We don't broadcast map change here because this is called during init, 
+    // but if called later we should.
+  }
+
+  update() {
+    if (this.room.state.phase !== PHASES.PLAYING) return;
+
+    // Check for player deaths (same as survival for now)
+    this.room.players.forEach(player => {
+      if (player.isDead) return;
+      if (player.oxygen <= 0) this.killPlayer(player, 'ran out of oxygen');
+      const hitByAlien = this.room.aliens.some(alien => alien.x === player.x && alien.y === player.y);
+      if (hitByAlien) this.killPlayer(player, 'was eaten by an alien');
+    });
+
+    this.checkWinCondition();
+  }
+
+  handleCollect(player, x, y, tile) {
+    if (tile === TILES.GOLD) {
+      player.gold = (player.gold || 0) + 1;
+      this.room.map[y][x] = TILES.FLOOR;
+      this.room.broadcastMapChange([{ x, y, tile: TILES.FLOOR }]);
+
+      this.room.chatHistory.push({
+        type: 'system',
+        message: `${getPlayerName(player.id)} picked up gold! (${player.gold} held)`,
+        timestamp: Date.now()
+      });
+      return true;
+    }
+    return false;
+  }
+
+  handleMove(player, newX, newY) {
+    // Check if moved onto bank
+    if (this.bankLocation && newX === this.bankLocation.x && newY === this.bankLocation.y) {
+      if (player.gold > 0) {
+        this.collectedGold += player.gold;
+        const deposited = player.gold;
+        player.gold = 0;
+
+        this.room.chatHistory.push({
+          type: 'system',
+          message: `${getPlayerName(player.id)} deposited ${deposited} gold! Total: ${this.collectedGold}/${this.totalGold}`,
+          timestamp: Date.now()
+        });
+
+        this.room.broadcast({
+          type: 'chat',
+          message: `Deposited ${deposited} gold!`,
+          playerId: player.id
+        });
+      }
+    }
+  }
+
+  killPlayer(player, reason) {
+    if (player.isDead) return;
+    player.isDead = true;
+
+    // Drop gold on death?
+    if (player.gold > 0) {
+      if (this.room.map[player.y][player.x] === TILES.FLOOR) {
+        this.room.map[player.y][player.x] = TILES.GOLD;
+        this.room.broadcastMapChange([{ x: player.x, y: player.y, tile: TILES.GOLD }]);
+        player.gold = 0;
+      }
+    }
+
+    this.room.broadcast({
+      type: 'playerDied',
+      playerId: player.id,
+      reason: reason
+    });
+  }
+
+  checkWinCondition() {
+    if (this.collectedGold >= this.totalGold) {
+      this.room.state.setPhase(PHASES.GAME_OVER);
+      this.room.state.winner = 'Players';
+      this.room.broadcast({
+        type: 'gameOver',
+        winner: 'Players'
+      });
+    }
+
+    // Fail if everyone dead
+    const activePlayers = Array.from(this.room.players.values()).filter(p => !p.isDead);
+    if (activePlayers.length === 0 && this.room.players.size > 0) {
+      this.room.state.setPhase(PHASES.GAME_OVER);
+      this.room.state.winner = 'Aliens';
+      this.room.broadcast({
+        type: 'gameOver',
+        winner: 'Aliens'
+      });
+    }
+  }
+}
+
 class GameRoom {
   constructor(roomId, settings = {}) {
     this.roomId = roomId;
     this.settings = {
       dropletCount: settings.dropletCount !== undefined ? settings.dropletCount : 5,
       boxCount: settings.boxCount !== undefined ? settings.boxCount : 5,
-      enemyCount: settings.enemyCount !== undefined ? settings.enemyCount : 3
+      enemyCount: settings.enemyCount !== undefined ? settings.enemyCount : 3,
+      gameMode: settings.gameMode || MODES.SURVIVAL
     };
     console.log(`[Room ${roomId}] Created with settings:`, this.settings);
     this.players = new Map();
@@ -145,7 +310,17 @@ class GameRoom {
 
     // Initialize Game State
     this.state = new GameState();
-    this.modeHandler = new SurvivalMode(this);
+
+    // Select Mode Handler
+    switch (this.settings.gameMode) {
+      case MODES.ROB_BANK:
+        this.modeHandler = new RobBankMode(this);
+        break;
+      case MODES.SURVIVAL:
+      default:
+        this.modeHandler = new SurvivalMode(this);
+        break;
+    }
 
     // Use generateMap if available, otherwise fallback
     try {
@@ -158,17 +333,22 @@ class GameRoom {
       this.map = generateSimpleMap(this.width, this.height);
     }
 
+    // Initialize mode-specific map elements
+    if (this.modeHandler.init) {
+      this.modeHandler.init();
+    }
+
     // Aliens list - managed server-side for synchronization
     this.aliens = [];
     this.alienTickMs = 700; // Alien movement interval
 
     // Pushable walls - track as entities for smooth transitions
     this.pushableWalls = [];
-    this.identifyWalls();
+    this._identifyWalls();
 
     // Boxes - track positions and contents server-side
     this.boxes = [];
-    this.populateBoxes();
+    this._populateBoxes();
 
     // Active bombs - track bomb placements
     this.bombs = [];
@@ -178,17 +358,17 @@ class GameRoom {
     this.maxChatHistory = 100; // Limit to last 100 messages
 
     // Spawn initial aliens
-    this.spawnAliens(this.settings.enemyCount);
+    this._spawnAliens(this.settings.enemyCount);
 
     // Start the game loop for this room
-    this.startGameLoop();
+    this._startGameLoop();
 
     // Auto-start game when created (for now)
     this.state.setPhase(PHASES.PLAYING);
   }
 
   // Identify pushable walls and assign IDs
-  identifyWalls() {
+  _identifyWalls() {
     this.pushableWalls = [];
     let nextWallId = 1;
     for (let y = 0; y < this.height; y++) {
@@ -201,7 +381,7 @@ class GameRoom {
   }
 
   // Populate boxes with contents (server-authoritative)
-  populateBoxes() {
+  _populateBoxes() {
     this.boxes = [];
     const boxSymbol = TILES.BOX;
     for (let y = 0; y < this.height; y++) {
@@ -227,7 +407,7 @@ class GameRoom {
   }
 
   // Generate a random light color (pastel/light colors)
-  generatePlayerColor() {
+  _generatePlayerColor() {
     const lightColors = [
       '#FFB6C1', // Light Pink
       '#FFD700', // Gold
@@ -250,7 +430,7 @@ class GameRoom {
   }
 
   // Find spawn position at a specific edge
-  findEdgeSpawn(edgeIndex) {
+  _findEdgeSpawn(edgeIndex) {
     const edges = [
       // Top edge (y = 0)
       () => {
@@ -327,10 +507,10 @@ class GameRoom {
     // Assign player to a different edge based on current player count
     const playerCount = this.players.size;
     const edgeIndex = playerCount % 4; // Cycle through 4 edges: top, bottom, left, right
-    const spawnPos = this.findEdgeSpawn(edgeIndex);
+    const spawnPos = this._findEdgeSpawn(edgeIndex);
 
     // Generate a random light color for this player
-    const color = this.generatePlayerColor();
+    const color = this._generatePlayerColor();
 
     this.players.set(playerId, {
       id: playerId,
@@ -435,6 +615,13 @@ class GameRoom {
       changes.push({ x, y, tile: TILES.FLOOR });
       this.broadcastMapChange(changes);
       return true;
+    }
+
+    // Delegate to mode handler for custom items (like Gold)
+    if (this.modeHandler && this.modeHandler.handleCollect) {
+      if (this.modeHandler.handleCollect(player, x, y, tile)) {
+        return true;
+      }
     }
 
     return false;
@@ -614,6 +801,11 @@ class GameRoom {
           if (player.oxygen > 0) {
             player.oxygen--;
           }
+
+          // Delegate move event to mode handler (e.g. for bank deposit)
+          if (this.modeHandler && this.modeHandler.handleMove) {
+            this.modeHandler.handleMove(player, newX, newY);
+          }
         }
         break;
 
@@ -633,7 +825,7 @@ class GameRoom {
     }
   }
 
-  spawnAliens(count = 3) {
+  _spawnAliens(count = 3) {
     let placed = 0;
     const maxAttempts = this.width * this.height * 5;
     let attempts = 0;
@@ -669,7 +861,7 @@ class GameRoom {
     }
   }
 
-  stepAliens() {
+  _stepAliens() {
     const TILE_DROPLET = '•';
 
     // Iterate from end so we can splice safely
@@ -712,27 +904,27 @@ class GameRoom {
     }
   }
 
-  updateGameLogic() {
+  _updateGameLogic() {
     // Delegate to mode handler
     if (this.modeHandler) {
       this.modeHandler.update();
     }
   }
 
-  startGameLoop() {
+  _startGameLoop() {
     const TICK_RATE = 60;
     this.gameLoopInterval = setInterval(() => {
-      this.updateGameLogic();
-      this.broadcastState();
+      this._updateGameLogic();
+      this._broadcastState();
     }, 1000 / TICK_RATE);
 
     // Separate timer for alien movement (slower than game loop)
     this.alienTimer = setInterval(() => {
-      this.stepAliens();
+      this._stepAliens();
     }, this.alienTickMs);
   }
 
-  broadcastState() {
+  _broadcastState() {
     const state = {
       type: 'stateUpdate',
       gameState: {

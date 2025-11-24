@@ -9,7 +9,9 @@
     // Game Modes
     const MODES = {
         SURVIVAL: 'SURVIVAL',
-        CRYSTAL_RUSH: 'CRYSTAL_RUSH'
+        ROB_BANK: 'ROB_BANK',
+        CAPTURE_FLAG: 'CAPTURE_FLAG',
+        KING_HILL: 'KING_HILL'
     };
 
     class GameState {

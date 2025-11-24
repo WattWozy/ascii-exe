@@ -7,7 +7,9 @@
         PUMP: '*',
         DROPLET: '•',
         BOX: 'Ø',
-        BOMB: 'B'
+        BOMB: 'B',
+        GOLD: '€',
+        BANK: '$'
     };
 
     const ITEM_INFO = {

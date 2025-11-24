@@ -19,6 +19,8 @@
       TILE_PUSH = (window.TILES && window.TILES.PUSHABLE) || 'o',
       TILE_PUMP = (window.TILES && window.TILES.PUMP) || '*',
       TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '•',
+      TILE_GOLD = (window.TILES && window.TILES.GOLD) || '€',
+      TILE_BANK = (window.TILES && window.TILES.BANK) || '$',
       PUMP_VALUE_DEFAULT = 25,
       playExitAnimation, generateMap,
       // new callbacks (client supplies these). fall back to no-ops that try window.gameClient if present
@@ -75,36 +77,6 @@
       // Send bomb placement to server
       onAction({ action: 'placeBomb', x, y });
 
-      // Optimistically add bomb locally (server will validate and sync)
-      playerState.bombs -= 1;
-      const bomb = { x, y, blinkOn: false, delay: 800, minDelay: 80, stopped: false };
-      bombs.push(bomb);
-
-      // recursive blink & accelerate (client-side visual only, server handles explosion)
-      function tick() {
-        if (bomb.stopped) return;
-        bomb.blinkOn = !bomb.blinkOn;
-        // speed up
-        bomb.delay = Math.max(bomb.minDelay, Math.floor(bomb.delay * 0.75));
-        // schedule next or explode if delay at min
-        if (bomb.delay <= bomb.minDelay) {
-          // final short blinks then explode (server will send mapChange)
-          setTimeout(() => {
-            // remove wall (optimistic, server will confirm)
-            map[bomb.y][bomb.x] = TILE_FLOOR;
-            // remove bomb from list
-            const idx = bombs.indexOf(bomb);
-            if (idx !== -1) bombs.splice(idx, 1);
-            render();
-          }, bomb.delay);
-        } else {
-          setTimeout(() => { tick(); render(); }, bomb.delay);
-        }
-        render();
-      }
-
-      // start blinking
-      setTimeout(() => { tick(); }, bomb.delay);
       return true;
     }
     // movement helpers
@@ -123,16 +95,6 @@
         if (map[pushY][pushX] !== TILE_FLOOR) return false;
         // Send push action to server (server will validate and apply)
         onAction({ action: 'push', fromX: nx, fromY: ny, toX: pushX, toY: pushY });
-        // Optimistically apply locally (server will correct if invalid)
-        map[ny][nx] = TILE_FLOOR;
-        map[pushY][pushX] = TILE_PUSH;
-
-        // Update entity locally
-        const wall = walls.find(w => w.x === nx && w.y === ny);
-        if (wall) {
-          wall.x = pushX;
-          wall.y = pushY;
-        }
 
         return true;
       }
@@ -180,6 +142,8 @@
           }
           else if (ch === (mapOpts.bombSymbol || (window.TILES && window.TILES.BOMB) || 'B')) { classes.push('map-bomb'); }
           else if (ch === TILE_DROPLET) { classes.push('droplet'); }
+          else if (ch === TILE_GOLD) { classes.push('gold'); }
+          else if (ch === TILE_BANK) { classes.push('bank'); }
           // check bombs to color the wall if attached
           const b = findBombAt(x, y);
           if (b) {
@@ -233,7 +197,7 @@
             const isVictory = winner === 'Players';
             const color = isVictory ? '#7cd67c' : '#ff6666';
             const title = isVictory ? 'VICTORY' : 'GAME OVER';
-            const subtext = isVictory ? 'Aliens Eliminated' : 'Aliens Win';
+            const subtext = isVictory ? 'You Won' : 'Aliens Win';
 
             overlayEl.innerHTML = `<div style="
               background: rgba(13, 17, 23, 0.95);
@@ -327,17 +291,13 @@
         e.preventDefault();
         if (draggedWall) {
           // Release wall
-          draggedWall = null;
           onAction({ action: 'drag', isDragging: false });
-          render();
         } else if (lastDir) {
           // Try to grab wall
           const wx = player.x + lastDir[0];
           const wy = player.y + lastDir[1];
           if (wx >= 0 && wy >= 0 && wx < width && wy < height && map[wy] && map[wy][wx] === TILE_PUSH) {
-            draggedWall = { x: wx, y: wy };
             onAction({ action: 'drag', wallX: wx, wallY: wy, isDragging: true });
-            render();
           }
         }
         return;
@@ -349,45 +309,9 @@
       const nx = player.x + dx, ny = player.y + dy;
 
       if (canWalk(nx, ny, dx, dy)) {
-        // Store old position for dragged wall
-        const oldX = player.x;
-        const oldY = player.y;
-
-        // Update local position immediately for responsive feel
-        player.x = nx;
-        player.y = ny;
-
-        // Move dragged wall to old position
-        if (draggedWall) {
-          const wallX = draggedWall.x;
-          const wallY = draggedWall.y;
-
-          // Check if old position is valid for wall
-          if (map[oldY] && map[oldY][oldX] === TILE_FLOOR) {
-            map[wallY][wallX] = TILE_FLOOR;
-            map[oldY][oldX] = TILE_PUSH;
-
-            // Update entity locally
-            const wall = walls.find(w => w.x === wallX && w.y === wallY);
-            if (wall) {
-              wall.x = oldX;
-              wall.y = oldY;
-            }
-
-            draggedWall = { x: oldX, y: oldY };
-          } else {
-            // Can't place wall, release it
-            draggedWall = null;
-          }
-        }
-
-        // decrease oxygen on move
-        if (playerState.oxygen > 0) playerState.oxygen--;
         // Send move to server for authoritative sync
         // Server will handle collection automatically when player moves onto items
         onSendMove(nx, ny);
-        render();
-        renderEntities();
 
       }
     };
@@ -629,6 +553,12 @@
       currentPhase = phase;
       winner = win;
       render();
+
+      if (phase === 'GAME_OVER') {
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 5000);
+      }
     }
 
     return {
