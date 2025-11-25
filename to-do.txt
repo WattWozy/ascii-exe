@@ -18,3 +18,27 @@
 
 [ ] survival mode: the map get's smaller, see the whole map. shooting rockets.
 [ ] instant kill: low visibility killing per team: knife attack. 
+
+
+TECHNICAL CONSIDERATIONS: 
+1. Packing Efficiency
+ - If rooms are very lightweight, you can run many rooms per VM.
+ - Use something like a container or process-per-room, or even a single Node process that handles multiple rooms (depending on game design).
+ - Better packing = lower cost.
+
+2. Autoscaling / Dynamic Provisioning
+ - You’ll likely want autoscaling: spin up new instances (VMs or containers) when room count goes up, shut them down when demand drops.
+ - Use managed container platforms / orchestration (Kubernetes, or serverless-container) to make that easier.
+ - Or use spot / preemptible instances to save cost if you allow interruptions.
+
+3. Network Cost
+ - With multiplayer, bandwidth might be non-trivial. Data egress (outbound) is often a big cost on cloud providers.
+ - Optimize how much data per tick / message you send.
+
+4. Game Loop / Tick Rate
+ - If your rooms run a game loop (tick loop), that costs CPU constantly — so “scale to zero” is less likely unless rooms are destroyed.
+ - If rooms are ephemeral, you can shut them down when empty; if persistent, you need “always-on” compute.
+
+5. State Persistence
+ - Do you need a database? Or is state purely in memory and not persisted for long?
+ - If you need persistent storage (leaderboards, player data), that’s another cost.
