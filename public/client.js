@@ -1,88 +1,101 @@
+/**
+ * GameClient class handles the WebSocket connection and client-side game logic.
+ * It acts as the bridge between the server and the rendering/input logic.
+ */
 class GameClient {
+  /**
+   * Goal: Initialize the GameClient, connect to server, and set up chat.
+   * Input: None
+   * Output: New GameClient instance
+   */
   constructor() {
     this.ws = null;
     this.playerId = null;
     this.players = new Map();
     this.game = null;
     this.chatOpen = false;
+
+    // Cache DOM elements for reuse
+    this.dom = {
+      chatInput: document.getElementById('chat-input'),
+      chatContainer: document.getElementById('chat-input-container'),
+      chatMessages: document.getElementById('chat-messages'),
+      screen: document.getElementById('screen') || document.getElementById('game-screen'),
+      stateMenu: document.getElementById('stateMenu') || document.getElementById('game-state'),
+      bombs: document.getElementById('bombs-val'),
+      oxygenBar: document.getElementById('oxygen-bar'),
+      oxygenText: document.getElementById('oxygen-val')
+    };
+
     this.connect();
     this.initChat();
   }
 
-
-
+  /**
+   * Goal: Initialize chat event listeners for opening/closing and sending messages.
+   * Input: None
+   * Output: None (Sets up side effects)
+   */
   initChat() {
-    const chatInput = document.getElementById('chat-input');
-    const chatInputContainer = document.getElementById('chat-input-container');
-    const chatMessages = document.getElementById('chat-messages');
+    if (!this.dom.chatInput || !this.dom.chatContainer || !this.dom.chatMessages) return;
 
-    if (!chatInput || !chatInputContainer || !chatMessages) return;
-
-    // Handle C key to open chat (only when not typing in input)
+    // Global key handler for chat toggle
     document.addEventListener('keydown', (e) => {
-      // Don't interfere if already typing in chat or other input
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        return;
-      }
+      // Ignore if typing in an input field
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
-      if (e.key === 'c' || e.key === 'C') {
-        if (!this.chatOpen) {
-          this.openChat();
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      } else if (e.key === 'Escape') {
-        if (this.chatOpen) {
-          this.closeChat();
-          e.preventDefault();
-          e.stopPropagation();
-        }
+      if (e.key.toLowerCase() === 'c' && !this.chatOpen) {
+        this.toggleChat(true);
+        e.preventDefault();
+      } else if (e.key === 'Escape' && this.chatOpen) {
+        this.toggleChat(false);
+        e.preventDefault();
       }
-    }, true); // Use capture phase to catch before game handler
+    }, true);
 
-    // Handle Enter to send message
-    chatInput.addEventListener('keydown', (e) => {
+    // Input field key handler
+    this.dom.chatInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        const message = chatInput.value.trim();
+        const message = this.dom.chatInput.value.trim();
         if (message) {
           this.sendChatMessage(message);
-          chatInput.value = '';
+          this.dom.chatInput.value = '';
         }
-        this.closeChat();
+        this.toggleChat(false);
         e.preventDefault();
       } else if (e.key === 'Escape') {
-        this.closeChat();
+        this.toggleChat(false);
         e.preventDefault();
       }
     });
   }
 
-  openChat() {
-    const chatInput = document.getElementById('chat-input');
-    const chatInputContainer = document.getElementById('chat-input-container');
-    if (!chatInput || !chatInputContainer) return;
+  /**
+   * Goal: Open or close the chat interface.
+   * Input: isOpen (boolean) - true to open, false to close
+   * Output: None
+   */
+  toggleChat(isOpen) {
+    if (!this.dom.chatInput || !this.dom.chatContainer) return;
 
-    this.chatOpen = true;
-    chatInputContainer.classList.add('active');
-    chatInput.focus();
+    this.chatOpen = isOpen;
+    if (isOpen) {
+      this.dom.chatContainer.classList.add('active');
+      this.dom.chatInput.focus();
+    } else {
+      this.dom.chatContainer.classList.remove('active');
+      this.dom.chatInput.blur();
+      if (this.dom.screen) this.dom.screen.focus();
+    }
   }
 
-  closeChat() {
-    const chatInput = document.getElementById('chat-input');
-    const chatInputContainer = document.getElementById('chat-input-container');
-    if (!chatInput || !chatInputContainer) return;
-
-    this.chatOpen = false;
-    chatInputContainer.classList.remove('active');
-    chatInput.blur();
-    // Return focus to game screen
-    const screen = document.getElementById('screen');
-    if (screen) screen.focus();
-  }
-
+  /**
+   * Goal: Add a message to the chat window.
+   * Input: message (string), isSystem (boolean), playerName (string), playerColor (string)
+   * Output: None (Updates DOM)
+   */
   addChatMessage(message, isSystem = false, playerName = null, playerColor = null) {
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
+    if (!this.dom.chatMessages) return;
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `chat-message ${isSystem ? 'system' : ''}`;
@@ -90,324 +103,298 @@ class GameClient {
     if (isSystem) {
       messageDiv.textContent = message;
     } else if (playerName) {
-      // Format: PlayerName: message
       const nameSpan = document.createElement('span');
       nameSpan.className = 'player-name';
-      if (playerColor) {
-        nameSpan.style.color = playerColor;
-      }
+      if (playerColor) nameSpan.style.color = playerColor;
       nameSpan.textContent = playerName;
+
       messageDiv.appendChild(nameSpan);
-      messageDiv.appendChild(document.createTextNode(': ' + message));
+      messageDiv.appendChild(document.createTextNode(`: ${message}`));
     } else {
       messageDiv.textContent = message;
     }
 
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    this.dom.chatMessages.appendChild(messageDiv);
+    this.dom.chatMessages.scrollTop = this.dom.chatMessages.scrollHeight;
   }
 
+  /**
+   * Goal: Load a history of chat messages.
+   * Input: chatHistory (Array of message objects)
+   * Output: None
+   */
   loadChatHistory(chatHistory) {
-    if (!chatHistory || !Array.isArray(chatHistory)) return;
+    if (!chatHistory || !Array.isArray(chatHistory) || !this.dom.chatMessages) return;
 
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
+    this.dom.chatMessages.innerHTML = ''; // Clear existing
 
-    // Clear existing messages
-    chatMessages.innerHTML = '';
-
-    // Load all messages from history
     chatHistory.forEach(msg => {
       if (msg.type === 'chat') {
-        // Extract player name - use stored name or extract from playerId
-        const playerName = msg.playerName || (msg.playerId ? this.getPlayerName(msg.playerId) : 'unknown');
-        this.addChatMessage(msg.message, false, playerName, msg.playerColor);
+        const name = msg.playerName || (msg.playerId ? this.getPlayerName(msg.playerId) : 'unknown');
+        this.addChatMessage(msg.message, false, name, msg.playerColor);
       } else if (msg.type === 'system') {
         this.addChatMessage(msg.message, true);
       }
     });
   }
 
+  /**
+   * Goal: Send a chat message to the server.
+   * Input: message (string)
+   * Output: None
+   */
   sendChatMessage(message) {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'chat',
-        message: message
-      }));
-    }
+    this.send({ type: 'chat', message });
   }
 
+  /**
+   * Goal: Establish WebSocket connection and set up handlers.
+   * Input: None
+   * Output: None
+   */
   connect() {
-    // Connect to WebSocket server
     this.ws = new WebSocket(`ws://${window.location.host}`);
 
-    this.ws.onopen = () => {
-      console.log('Connected to game server');
-    };
-
-    this.ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.handleMessage(data);
-    };
-
+    this.ws.onopen = () => console.log('Connected to game server');
+    this.ws.onmessage = (event) => this.handleMessage(JSON.parse(event.data));
     this.ws.onclose = () => {
       console.log('Disconnected from server');
-      // Attempt to reconnect after 2 seconds
       setTimeout(() => this.connect(), 2000);
     };
-
-    this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
+    this.ws.onerror = (error) => console.error('WebSocket error:', error);
   }
 
+  /**
+   * Goal: Helper to send data safely over WebSocket.
+   * Input: data (object)
+   * Output: None
+   */
+  send(data) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  /**
+   * Goal: Dispatch incoming server messages to appropriate handlers.
+   * Input: data (object) - The parsed JSON message from server
+   * Output: None
+   */
   handleMessage(data) {
-    switch (data.type) {
-      case 'init':
-        this.playerId = data.playerId;
+    const handlers = {
+      'init': () => this.handleInit(data),
+      'stateUpdate': () => this.handleStateUpdate(data),
+      'playerDied': () => this.handlePlayerDied(data),
+      'gameOver': () => this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true),
+      'mapChange': () => this.game?.applyMapChanges?.(data.changes),
+      'bombUpdate': () => this.game?.updateBomb?.(data.bomb),
+      'playerJoined': () => this.handlePlayerJoined(data),
+      'playerLeft': () => this.handlePlayerLeft(data),
+      'chat': () => this.handleChat(data)
+    };
 
-        // create game instance and inject callbacks
-        this.game = window.createGame({
-          map: data.map,
-          width: data.width,
-          height: data.height,
-          screenEl: document.getElementById('screen') || document.getElementById('game-screen'),
-          stateMenuEl: document.getElementById('stateMenu') || document.getElementById('game-state'),
-          bombsEl: document.getElementById('bombs-val'),
-          oxygenBarEl: document.getElementById('oxygen-bar'),
-          oxygenTextEl: document.getElementById('oxygen-val'),
-          generateMap: (typeof window.generateMap !== 'undefined') ? window.generateMap : undefined,
-          onSendMove: (x, y) => this.sendMove(x, y),
-          onAction: (action) => this.sendAction(action)
+    if (handlers[data.type]) {
+      handlers[data.type]();
+    }
+  }
+
+  /**
+   * Goal: Initialize the game with server data.
+   * Input: data (object) - Init data including map, player info, etc.
+   * Output: None
+   */
+  handleInit(data) {
+    this.playerId = data.playerId;
+
+    this.game = window.createGame({
+      map: data.map,
+      width: data.width,
+      height: data.height,
+      screenEl: this.dom.screen,
+      stateMenuEl: this.dom.stateMenu,
+      bombsEl: this.dom.bombs,
+      oxygenBarEl: this.dom.oxygenBar,
+      oxygenTextEl: this.dom.oxygenText,
+      generateMap: window.generateMap,
+      onSendMove: (x, y) => this.sendMove(x, y),
+      onAction: (action) => this.sendAction(action)
+    });
+
+    // Initial Sync
+    if (this.game.setPlayerPosition) this.game.setPlayerPosition(data.playerX, data.playerY);
+    this.syncGameState(data.gameState);
+
+    // Inventory Sync
+    if (data.playerBombs !== undefined && this.game.updateInventory) {
+      this.game.updateInventory({
+        bombs: data.playerBombs,
+        oxygen: data.playerOxygen || 50,
+        jumps: data.playerJumps || 1,
+        dash: false
+      });
+    }
+
+    this.loadChatHistory(data.chatHistory);
+    this.game.start();
+  }
+
+  /**
+   * Goal: Update game state based on server broadcast.
+   * Input: data (object) - Contains gameState and inventory
+   * Output: None
+   */
+  handleStateUpdate(data) {
+    this.players = new Map(data.gameState.players.map(p => [p.id, p]));
+    const myPlayer = this.players.get(this.playerId);
+
+    if (this.game) {
+      // Update local player
+      if (myPlayer) {
+        this.game.updatePlayerPosition?.(myPlayer.x, myPlayer.y);
+        this.game.updateInventory?.(data.inventory || {
+          bombs: myPlayer.bombs,
+          oxygen: myPlayer.oxygen,
+          jumps: myPlayer.jumps,
+          dash: myPlayer.dash
         });
+        this.game.updateDragState?.(myPlayer.draggedWall);
+      }
 
-        // Set initial player position from server if provided
-        if (data.playerX !== undefined && data.playerY !== undefined && this.game.setPlayerPosition) {
-          this.game.setPlayerPosition(data.playerX, data.playerY);
-        }
-
-        // Set initial aliens from server if provided
-        if (data.gameState && data.gameState.aliens && this.game.updateAliens) {
-          this.game.updateAliens(data.gameState.aliens);
-        }
-
-        // Set initial boxes from server
-        if (data.gameState && data.gameState.boxes && this.game.updateBoxes) {
-          this.game.updateBoxes(data.gameState.boxes);
-        }
-
-        // Set initial bombs from server
-        if (data.gameState && data.gameState.bombs && this.game.updateBombs) {
-          this.game.updateBombs(data.gameState.bombs);
-        }
-
-        // Set initial walls from server
-        if (data.gameState && data.gameState.walls && this.game.updateWalls) {
-          this.game.updateWalls(data.gameState.walls);
-        }
-
-        // Set initial other players if any
-        if (data.gameState && data.gameState.players && this.game.updateOtherPlayers) {
-          const otherPlayers = data.gameState.players
-            .filter(p => p.id !== this.playerId)
-            .map(p => ({ id: p.id, x: p.x, y: p.y, color: p.color }));
-          this.game.updateOtherPlayers(otherPlayers);
-        }
-
-        // Set initial inventory from server
-        if (data.playerBombs !== undefined && this.game.updateInventory) {
-          this.game.updateInventory({
-            bombs: data.playerBombs,
-            oxygen: data.playerOxygen || 50,
-            jumps: data.playerJumps || 1,
-            dash: false
-          });
-        }
-
-        // Load chat history
-        if (data.chatHistory && Array.isArray(data.chatHistory)) {
-          this.loadChatHistory(data.chatHistory);
-        }
-
-        this.game.start();
-        break;
-
-      case 'stateUpdate':
-        // Update game state from server
-        this.players = new Map(data.gameState.players.map(p => [p.id, p]));
-
-        // Update local player position from authoritative server state
-        if (this.game && this.game.updatePlayerPosition) {
-          const myPlayer = this.players.get(this.playerId);
-          if (myPlayer) {
-            this.game.updatePlayerPosition(myPlayer.x, myPlayer.y);
-            // Update inventory from server
-            if (this.game.updateInventory && data.inventory) {
-              this.game.updateInventory(data.inventory);
-            } else if (this.game.updateInventory) {
-              // Fallback (legacy)
-              this.game.updateInventory({
-                bombs: myPlayer.bombs,
-                oxygen: myPlayer.oxygen,
-                jumps: myPlayer.jumps,
-                dash: myPlayer.dash
-              });
-            }
-            // Update drag state from server
-            if (this.game.updateDragState) {
-              this.game.updateDragState(myPlayer.draggedWall);
-            }
-          }
-        }
-
-        // Update other players from server
-        if (this.game && this.game.updateOtherPlayers) {
-          const otherPlayers = this.getOtherPlayers();
-          this.game.updateOtherPlayers(otherPlayers);
-        }
-
-        // Update aliens from server (authoritative)
-        if (this.game && this.game.updateAliens && data.gameState.aliens) {
-          this.game.updateAliens(data.gameState.aliens);
-        }
-
-        // Update boxes from server (authoritative)
-        if (this.game && this.game.updateBoxes && data.gameState.boxes) {
-          this.game.updateBoxes(data.gameState.boxes);
-        }
-
-        // Update walls from server (authoritative)
-        if (this.game && this.game.updateWalls && data.gameState.walls) {
-          this.game.updateWalls(data.gameState.walls);
-        }
-
-        // Update bombs from server (authoritative)
-        if (this.game && this.game.updateBombs && data.gameState.bombs) {
-          this.game.updateBombs(data.gameState.bombs);
-        }
-
-        // Update game phase
-        if (this.game && this.game.updateGamePhase && data.gameState.phase) {
-          this.game.updateGamePhase(data.gameState.phase, data.gameState.winner);
-        }
-        break;
-
-      case 'playerDied':
-        // Handle player death notification
-        const diedPlayer = this.players.get(data.playerId);
-        if (diedPlayer) {
-          diedPlayer.isDead = true;
-          this.addChatMessage(`${window.getPlayerName(data.playerId)} died: ${data.reason}`, true);
-        }
-        break;
-
-      case 'gameOver':
-        // Handle game over notification
-        this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true);
-        break;
-
-      case 'mapChange':
-        // Apply map changes from server
-        if (this.game && this.game.applyMapChanges && data.changes) {
-          this.game.applyMapChanges(data.changes);
-        }
-        break;
-
-      case 'bombUpdate':
-        // Update bomb state
-        if (this.game && this.game.updateBomb && data.bomb) {
-          this.game.updateBomb(data.bomb);
-        }
-        break;
-
-      case 'playerJoined':
-        // New player joined
-        this.players.set(data.player.id, data.player);
-        console.log('Player joined:', data.player.id);
-
-        // Show in chat
-        const joinedPlayer = this.players.get(data.player.id);
-        if (joinedPlayer && joinedPlayer.id !== this.playerId) {
-          this.addChatMessage(`${window.getPlayerName(joinedPlayer.id)} joined the room`, true);
-        }
-
-        // Update other players display
-        if (this.game && this.game.updateOtherPlayers) {
-          const otherPlayers = this.getOtherPlayers();
-          this.game.updateOtherPlayers(otherPlayers);
-        }
-        break;
-
-      case 'playerLeft':
-        // Player left
-        this.players.delete(data.playerId);
-        console.log('Player left:', data.playerId);
-
-        // Show in chat
-        this.addChatMessage(`${this.getPlayerName(data.playerId)} left the room`, true);
-        break;
-
-      case 'chat':
-        // Chat message received
-        if (data.playerId && data.message) {
-          // Use the playerName and playerColor from server if available
-          const senderName = data.playerName || this.getPlayerName(data.playerId);
-          const senderColor = data.playerColor || (this.players.get(data.playerId)?.color);
-          this.addChatMessage(data.message, false, senderName, senderColor);
-        }
-        break;
+      // Update world
+      this.game.updateOtherPlayers?.(this.getOtherPlayers());
+      this.syncGameState(data.gameState);
+      this.game.updateGamePhase?.(data.gameState.phase, data.gameState.winner);
     }
   }
 
-  // Send player input to server
+  /**
+   * Goal: Sync common game state entities (aliens, boxes, walls, bombs).
+   * Input: gameState (object)
+   * Output: None
+   */
+  syncGameState(gameState) {
+    if (!gameState || !this.game) return;
+    if (gameState.aliens) this.game.updateAliens?.(gameState.aliens);
+    if (gameState.boxes) this.game.updateBoxes?.(gameState.boxes);
+    if (gameState.walls) this.game.updateWalls?.(gameState.walls);
+    if (gameState.bombs) this.game.updateBombs?.(gameState.bombs);
+
+    // Initial player sync for init
+    if (gameState.players && !this.players.size) {
+      const otherPlayers = gameState.players
+        .filter(p => p.id !== this.playerId)
+        .map(p => ({ id: p.id, x: p.x, y: p.y, color: p.color }));
+      this.game.updateOtherPlayers?.(otherPlayers);
+    }
+  }
+
+  /**
+   * Goal: Handle player death event.
+   * Input: data (object)
+   * Output: None
+   */
+  handlePlayerDied(data) {
+    const player = this.players.get(data.playerId);
+    if (player) {
+      player.isDead = true;
+      this.addChatMessage(`${window.getPlayerName(data.playerId)} died: ${data.reason}`, true);
+    }
+  }
+
+  /**
+   * Goal: Handle new player joining.
+   * Input: data (object)
+   * Output: None
+   */
+  handlePlayerJoined(data) {
+    this.players.set(data.player.id, data.player);
+    console.log('Player joined:', data.player.id);
+
+    if (data.player.id !== this.playerId) {
+      this.addChatMessage(`${window.getPlayerName(data.player.id)} joined the room`, true);
+    }
+    this.game?.updateOtherPlayers?.(this.getOtherPlayers());
+  }
+
+  /**
+   * Goal: Handle player leaving.
+   * Input: data (object)
+   * Output: None
+   */
+  handlePlayerLeft(data) {
+    this.players.delete(data.playerId);
+    console.log('Player left:', data.playerId);
+    this.addChatMessage(`${this.getPlayerName(data.playerId)} left the room`, true);
+  }
+
+  /**
+   * Goal: Handle incoming chat message.
+   * Input: data (object)
+   * Output: None
+   */
+  handleChat(data) {
+    if (!data.playerId || !data.message) return;
+    const name = data.playerName || this.getPlayerName(data.playerId);
+    const color = data.playerColor || this.players.get(data.playerId)?.color;
+    this.addChatMessage(data.message, false, name, color);
+  }
+
+  /**
+   * Goal: Send movement command to server.
+   * Input: x (number), y (number)
+   * Output: None
+   */
   sendMove(x, y) {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'move',
-        x: x,
-        y: y
-      }));
-    }
+    this.send({ type: 'move', x, y });
   }
 
+  /**
+   * Goal: Send generic action to server.
+   * Input: action (object)
+   * Output: None
+   */
   sendAction(action) {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      // Spread action object into the message
-      this.ws.send(JSON.stringify({
-        type: 'action',
-        ...action
-      }));
-    }
+    this.send({ type: 'action', ...action });
   }
 
-  // Get your player data
+  /**
+   * Goal: Get local player object.
+   * Input: None
+   * Output: Player object or undefined
+   */
   getMyPlayer() {
     return this.players.get(this.playerId);
   }
 
-  // Get all other players
+  /**
+   * Goal: Get list of other players.
+   * Input: None
+   * Output: Array of player objects
+   */
   getOtherPlayers() {
-    return Array.from(this.players.values())
-      .filter(p => p.id !== this.playerId);
+    return Array.from(this.players.values()).filter(p => p.id !== this.playerId);
   }
 
-  // Join a room
+  /**
+   * Goal: Helper to get player name (wrapper around global util).
+   * Input: playerId (string)
+   * Output: string
+   */
+  getPlayerName(playerId) {
+    return window.getPlayerName ? window.getPlayerName(playerId) : playerId;
+  }
+
+  /**
+   * Goal: Join a specific game room.
+   * Input: roomId (string), settings (object)
+   * Output: None
+   */
   joinRoom(roomId, settings = {}) {
+    const msg = { type: 'joinRoom', roomId, settings };
     if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'joinRoom',
-        roomId: roomId,
-        settings: settings
-      }));
+      this.send(msg);
     } else {
-      // If not connected yet, wait for connection
-      this.ws.addEventListener('open', () => {
-        this.ws.send(JSON.stringify({
-          type: 'joinRoom',
-          roomId: roomId,
-          settings: settings
-        }));
-      }, { once: true });
+      this.ws.addEventListener('open', () => this.send(msg), { once: true });
     }
   }
 }

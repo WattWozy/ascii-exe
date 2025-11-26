@@ -1,6 +1,12 @@
-// Shared utility functions
+/**
+ * Shared utility functions
+ */
 (function (exports) {
-    // Extract player name from player ID (last part after underscore)
+    /**
+     * Goal: Extract a readable player name from a unique ID.
+     * Input: playerId (string) - The full player ID (e.g., "player_123_name").
+     * Output: (string) - The extracted name or a fallback string.
+     */
     function getPlayerName(playerId) {
         if (!playerId) return 'unknown';
         const parts = playerId.split('_');
@@ -8,26 +14,39 @@
         return parts.length > 2 ? parts[parts.length - 1] : playerId.substring(playerId.length - 8);
     }
 
-    // Find box at position
+    /**
+     * Goal: Find a box entity at specific coordinates.
+     * Input: boxes (Array), x (number), y (number)
+     * Output: (Object|undefined) - The box object if found, otherwise undefined.
+     */
     function findBoxAt(boxes, x, y) {
-        if (!boxes) return null;
-        return boxes.find(b => b.x === x && b.y === y);
+        return boxes?.find(b => b.x === x && b.y === y);
     }
 
-    // Find bomb at position
+    /**
+     * Goal: Find a bomb entity at specific coordinates.
+     * Input: bombs (Array), x (number), y (number)
+     * Output: (Object|undefined) - The bomb object if found, otherwise undefined.
+     */
     function findBombAt(bombs, x, y) {
-        if (!bombs) return null;
-        return bombs.find(b => b.x === x && b.y === y);
+        return bombs?.find(b => b.x === x && b.y === y);
     }
 
-    // Check if a tile is walkable (basic terrain check)
+    /**
+     * Goal: Check if a specific tile is within bounds and not a wall.
+     * Input: map (Array), x (number), y (number), width (number), height (number), TILE_WALL (string)
+     * Output: (boolean) - True if the tile is walkable, false otherwise.
+     */
     function isWalkable(map, x, y, width, height, TILE_WALL) {
         if (x < 0 || y < 0 || x >= width || y >= height) return false;
-        if (!map[y]) return false;
-        return map[y][x] !== TILE_WALL;
+        return map[y]?.[x] !== TILE_WALL;
     }
 
-    // Comprehensive move validation
+    /**
+     * Goal: Validate a move, considering walls, bounds, and pushable objects.
+     * Input: map (Array), x (number), y (number), width (number), height (number), TILE_WALL (string), TILE_PUSH (string), TILE_FLOOR (string), draggedWall (Object)
+     * Output: (boolean) - True if the move is valid.
+     */
     function isValidMove(map, x, y, width, height, TILE_WALL, TILE_PUSH, TILE_FLOOR, draggedWall) {
         // Basic bounds and wall check
         if (!isWalkable(map, x, y, width, height, TILE_WALL)) return false;
@@ -36,31 +55,70 @@
 
         // Handle pushable blocks
         if (tile === TILE_PUSH) {
-            // If this is the wall we are dragging, we can walk "through" it (it moves with us)
+            // Allow movement if we are dragging this specific wall (it moves with the player)
             if (draggedWall && draggedWall.x === x && draggedWall.y === y) {
                 return true;
             }
-            // Otherwise, we need to check if we can push it
-            // Note: Actual push logic involves checking the tile BEHIND the pushable block
-            // This function just checks if we can step onto this tile. 
-            // For pushable blocks, we generally can't step ON them unless we push them.
-            // So this function might need to be used in context.
-            // For now, let's say we can't walk on it unless it's being pushed (handled separately)
+            // Otherwise, we cannot step directly onto a pushable block without a push action
             return false;
         }
 
         return true;
     }
 
-    // Check if bomb can be placed
+    /**
+     * Goal: Check if a bomb can be placed at the target location.
+     * Input: map (Array), bombs (Array), x (number), y (number), width (number), height (number), TILE_WALL (string)
+     * Output: (boolean) - True if placement is allowed.
+     */
     function canPlaceBomb(map, bombs, x, y, width, height, TILE_WALL) {
+        // Must be within bounds
         if (x < 0 || y < 0 || x >= width || y >= height) return false;
+
         // Must be a wall
-        if (!map[y] || map[y][x] !== TILE_WALL) return false;
-        // Cannot place if bomb already exists
+        if (map[y]?.[x] !== TILE_WALL) return false;
+
+        // Cannot place if a bomb is already there
         if (findBombAt(bombs, x, y)) return false;
 
         return true;
+    }
+
+    /**
+     * Goal: Display a text-based exit animation on a DOM element.
+     * Input: screenEl (HTMLElement), opts (Object) - Animation options (frames, interval, loops).
+     * Output: (Promise) - Resolves when the animation completes.
+     */
+    function playExitAnimation(screenEl, opts = {}) {
+        const frames = opts.frames || [
+            "   Exiting   ",
+            "  Exiting.  ",
+            " Exiting.. ",
+            "Exiting...",
+            " Exiting.. ",
+            "  Exiting.  "
+        ];
+        const interval = opts.interval || 180; // ms per frame
+        const loops = opts.loops || 6; // total frame cycles
+
+        return new Promise((resolve) => {
+            let count = 0;
+            let idx = 0;
+            const timer = setInterval(() => {
+                screenEl.textContent = frames[idx];
+                idx = (idx + 1) % frames.length;
+                count++;
+
+                if (count >= frames.length * loops) {
+                    clearInterval(timer);
+                    // small fade-to-black effect: clear screen briefly
+                    setTimeout(() => {
+                        screenEl.textContent = '';
+                        resolve();
+                    }, 120);
+                }
+            }, interval);
+        });
     }
 
     const utils = {
@@ -69,19 +127,16 @@
         findBombAt,
         isWalkable,
         isValidMove,
-        canPlaceBomb
+        canPlaceBomb,
+        playExitAnimation
     };
 
+    // Export logic
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = utils;
     } else {
-        // Expose individually to window for easier access or as a namespace
         window.utils = utils;
-        window.getPlayerName = getPlayerName;
-        window.findBoxAt = findBoxAt;
-        window.findBombAt = findBombAt;
-        window.isWalkable = isWalkable;
-        window.isValidMove = isValidMove;
-        window.canPlaceBomb = canPlaceBomb;
+        // Expose functions globally for convenience
+        Object.assign(window, utils);
     }
 })(typeof module === 'undefined' ? window : module.exports);
