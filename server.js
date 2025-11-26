@@ -546,9 +546,7 @@ class GameRoom {
     this.aliens = [];
     this.alienTickMs = 700; // Alien movement interval
 
-    // Pushable walls - track as entities for smooth transitions
-    this.pushableWalls = [];
-    this._identifyWalls();
+
 
     // Boxes - track positions and contents server-side
     this.boxes = [];
@@ -586,18 +584,7 @@ class GameRoom {
     }, 10000); // 10 seconds
   }
 
-  // Identify pushable walls and assign IDs
-  _identifyWalls() {
-    this.pushableWalls = [];
-    let nextWallId = 1;
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        if (this.map[y] && this.map[y][x] === TILES.PUSHABLE) {
-          this.pushableWalls.push({ id: nextWallId++, x, y });
-        }
-      }
-    }
-  }
+
 
   // Populate boxes with contents (server-authoritative)
   _populateBoxes() {
@@ -879,12 +866,7 @@ class GameRoom {
     this.map[fromY][fromX] = TILES.FLOOR;
     this.map[toY][toX] = TILES.PUSHABLE;
 
-    // Update entity
-    const wall = this.pushableWalls.find(w => w.x === fromX && w.y === fromY);
-    if (wall) {
-      wall.x = toX;
-      wall.y = toY;
-    }
+
 
     this.broadcastMapChange([
       { x: fromX, y: fromY, tile: TILES.FLOOR },
@@ -1010,12 +992,7 @@ class GameRoom {
               this.map[wallY][wallX] = TILES.FLOOR;
               this.map[oldY][oldX] = TILES.PUSHABLE;
 
-              // Update entity
-              const wall = this.pushableWalls.find(w => w.x === wallX && w.y === wallY);
-              if (wall) {
-                wall.x = oldX;
-                wall.y = oldY;
-              }
+
 
               // Update dragged wall coordinates
               player.draggedWall = { x: oldX, y: oldY };
@@ -1086,11 +1063,7 @@ class GameRoom {
       if (this.map[y] && this.map[y][x] === TILES.FLOOR) {
         const posKey = `${x},${y}`;
         if (!playerPositions.has(posKey) && !alienPositions.has(posKey)) {
-          // Assign a unique ID to each alien
-          const alienId = this.nextAlienId || 1;
-          this.nextAlienId = alienId + 1;
-
-          this.aliens.push({ id: alienId, x, y });
+          this.aliens.push({ x, y });
           alienPositions.add(posKey); // Track it so we don't place another here
           placed++;
         }
@@ -1210,8 +1183,7 @@ class GameRoom {
           action: p.action, // Include action for all players
           draggedWall: p.draggedWall // Include draggedWall for all players
         })),
-        aliens: this.aliens.map(a => ({ id: a.id, x: a.x, y: a.y })),
-        walls: this.pushableWalls.map(w => ({ id: w.id, x: w.x, y: w.y })), // Send walls as entities
+        aliens: this.aliens.map(a => ({ x: a.x, y: a.y })),
         boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })), // Include boxes
         bombs: this.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn })),
         phase: this.state.phase, // Include game phase
@@ -1288,8 +1260,7 @@ wss.on('connection', (ws, req) => {
           playerId,
           gameState: {
             ...currentRoom.gameState,
-            aliens: currentRoom.aliens.map(a => ({ id: a.id, x: a.x, y: a.y })),
-            walls: currentRoom.pushableWalls.map(w => ({ id: w.id, x: w.x, y: w.y })),
+            aliens: currentRoom.aliens.map(a => ({ x: a.x, y: a.y })),
             players: Array.from(currentRoom.players.values()).map(p => ({
               id: p.id,
               x: p.x,

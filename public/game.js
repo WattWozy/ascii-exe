@@ -123,6 +123,12 @@
         }
       });
 
+      // Create map of aliens
+      const alienMap = new Set();
+      aliens.forEach(a => {
+        alienMap.add(`${a.x},${a.y}`);
+      });
+
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           let ch = map[y][x];
@@ -130,15 +136,33 @@
           let style = '';
 
           // Check for other players first (they render on top of floor)
-          // REMOVED: Players are now rendered in entity layer
+          const otherP = otherPlayerMap.get(`${x},${y}`);
+          if (otherP && !otherP.isDead) {
+            ch = TILE_PLAYER;
+            classes.push('player');
+            if (otherP.color) style = `color: ${otherP.color}`;
+          }
 
           // Then check for local player
-          // REMOVED: Player is now rendered in entity layer
+          if (player.x === x && player.y === y && !playerState.isDead) {
+            ch = TILE_PLAYER;
+            classes.push('player');
+            // Local player color is default green (handled by class) or custom if we had one
+          }
+
+          // Check for aliens
+          if (alienMap.has(`${x},${y}`)) {
+            ch = '👾'; // Alien symbol
+            classes.push('alien');
+          }
 
           if (ch === TILE_FLOOR) { ch = ' '; }
           else if (ch === TILE_PUSH) {
-            // Don't render pushable wall in grid, it's an entity now
-            ch = ' ';
+            // Standard pushable wall rendering
+            // If this is the dragged wall, add dragging class
+            if (draggedWall && draggedWall.x === x && draggedWall.y === y) {
+              classes.push('dragging');
+            }
           }
           else if (ch === TILE_PUMP) { classes.push('pump'); }
           else if (ch === (mapOpts.boxSymbol || (window.TILES && window.TILES.BOX) || 'Ø')) {
@@ -160,10 +184,7 @@
             classes.push('bomb');
             if (b.blinkOn) classes.push('bomb-on');
           }
-          // check if this is the dragged wall
-          if (draggedWall && draggedWall.x === x && draggedWall.y === y) {
-            classes.push('dragging');
-          }
+
           const disp = (ch === ' ') ? '&nbsp;' : escapeHtml(ch);
           const styleAttr = style ? ` style="${style}"` : '';
           out += `<span class="${classes.join(' ')}"${styleAttr}>${disp}</span>`;
@@ -363,123 +384,17 @@
       }
     }
 
-    // Walls list - managed by server
-    let walls = [];
-
     // Update aliens from server (authoritative)
     function updateAliens(serverAliens) {
       // Update aliens array with server data
-      aliens = serverAliens.map(a => ({ id: a.id, x: a.x, y: a.y }));
-      renderEntities();
-    }
-
-    // Update walls from server
-    function updateWalls(serverWalls) {
-      walls = serverWalls.map(w => ({ id: w.id, x: w.x, y: w.y }));
-      renderEntities();
-    }
-
-    function renderEntities() {
-      const layerEl = document.getElementById('entity-layer');
-      if (!layerEl) return;
-
-      // Helper to update/create sprites
-      const updateSprites = (items, typeClass, getContent, getColor, getExtraClass) => {
-        const existing = new Map();
-        layerEl.querySelectorAll(`.${typeClass}`).forEach(el => {
-          existing.set(el.dataset.id, el);
-        });
-
-        const currentIds = new Set();
-
-        items.forEach(item => {
-          const id = String(item.id);
-          currentIds.add(id);
-
-          let el = existing.get(id);
-          const left = `calc(12px + ${item.x} * 1.5ch)`;
-          const top = `calc(12px + ${item.y} * 1.25em)`;
-
-          if (!el) {
-            el = document.createElement('div');
-            el.className = `${typeClass} entering`;
-            el.dataset.id = id;
-            el.textContent = getContent(item);
-            el.style.left = left;
-            el.style.top = top;
-            if (getColor) el.style.color = getColor(item);
-            if (getExtraClass) {
-              const extra = getExtraClass(item);
-              if (extra) el.classList.add(extra);
-            }
-            layerEl.appendChild(el);
-
-            // Trigger reflow
-            el.offsetHeight;
-            el.classList.remove('entering');
-            el.classList.add('visible');
-          } else {
-            el.style.left = left;
-            el.style.top = top;
-            if (getColor) el.style.color = getColor(item);
-
-            // Update extra classes (like dragging)
-            if (getExtraClass) {
-              const extra = getExtraClass(item);
-              // Reset specific classes? For now just add/remove known ones
-              if (extra === 'dragging') el.classList.add('dragging');
-              else el.classList.remove('dragging');
-            }
-
-            if (!el.classList.contains('visible')) {
-              el.classList.add('visible');
-              el.classList.remove('entering');
-            }
-          }
-        });
-
-        // Remove old
-        existing.forEach((el, id) => {
-          if (!currentIds.has(id)) {
-            el.classList.remove('visible');
-            el.classList.add('exiting');
-            setTimeout(() => {
-              if (el.parentNode) el.parentNode.removeChild(el);
-            }, 200);
-          }
-        });
-      };
-
-      // Render Aliens
-      updateSprites(aliens, 'alien-sprite', () => '👾', () => null);
-
-      // Render Walls
-      updateSprites(walls, 'wall-sprite', () => 'o', () => null, (w) => {
-        if (draggedWall && draggedWall.x === w.x && draggedWall.y === w.y) return 'dragging';
-        return null;
-      });
-
-      // Render Players
-      // Combine local player and other players
-      const allPlayers = [];
-      // Local player (use special ID 'me')
-      if (!playerState.isDead) {
-        allPlayers.push({ id: 'me', x: player.x, y: player.y, color: '#7cd67c' });
-      }
-      // Other players
-      otherPlayers.forEach(p => {
-        if (!p.isDead) {
-          allPlayers.push({ id: `p_${p.id}`, x: p.x, y: p.y, color: p.color || '#7cd67c' });
-        }
-      });
-
-      updateSprites(allPlayers, 'player-sprite', () => '@', (p) => p.color);
+      aliens = serverAliens.map(a => ({ x: a.x, y: a.y }));
+      render();
     }
 
     // Update other players from server
     function updateOtherPlayers(players) {
       otherPlayers = players || [];
-      renderEntities();
+      render();
     }
 
     // Apply map changes from server (authoritative)
@@ -492,8 +407,6 @@
         }
       });
       render();
-      // Also re-render entities as map changes might affect them (e.g. wall destroyed)
-      // Actually walls are separate now, but if a wall is destroyed it should be removed from walls list by server update
     }
 
     // Update boxes from server (authoritative)
@@ -552,7 +465,6 @@
       }
 
       render();
-      renderEntities(); // Re-render to handle death state
     }
 
     function updateModeStatus(status) {
@@ -647,7 +559,6 @@
     function updateDragState(serverDraggedWall) {
       draggedWall = serverDraggedWall;
       render();
-      renderEntities(); // Re-render to show dragging effect on wall
     }
 
     // Game Phase handling
@@ -671,7 +582,7 @@
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
-      updateDragState, updateGamePhase, updateWalls
+      updateDragState, updateGamePhase
     };
   }
 
