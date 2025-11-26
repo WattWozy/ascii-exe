@@ -248,6 +248,11 @@ class GameClient {
     const myPlayer = this.players.get(this.playerId);
 
     if (this.game) {
+      // Update dark-room mode if specified
+      if (data.darkRoom !== undefined) {
+        this.game.updateDarkRoomMode?.(data.darkRoom);
+      }
+
       // Update local player
       if (myPlayer) {
         this.game.updatePlayerPosition?.(myPlayer.x, myPlayer.y);

@@ -182,20 +182,47 @@
         .setting-input {
             -moz-appearance: textfield;
         }
+
+        .setting-checkbox {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            position: relative;
+        }
+
+        .setting-checkbox:checked {
+            background-color: var(--accent-color);
+        }
+
+        .setting-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            color: var(--bg-color);
+            font-size: 16px;
+            font-weight: bold;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
         <pre class="ascii-art">
-    _    ___  ___  ___  ___ 
-   /_\  / __|/ __||_ _||_ _|
-  / _ \ \__ \ (__  | |  | | 
- /_/ \_\|___/\___||___||___|
-  __  __  ___  _  _  ___  ___ 
- |  \/  ||_ _|| \| || __|| _ \
- | |\/| | | | | .` || _| |   /
- |_|  |_||___||_|\_||___||_|_\
+
+
+    _    ___  ___  ___  ___  _  _    _    _   _  _____ 
+   /_\  / __|/ __||_ _||_ _|| \| |  /_\  | | | ||_   _|
+  / _ \ \__ \ (__  | |  | | | .` | / _ \ | |_| |  | |  
+ /_/ \_\|___/\___||___||___||_|\_|/_/ \_\ \___/   |_|  
         </pre>
 
         <div class="menu">
@@ -212,13 +239,25 @@
                     <label for="boxCount">BOXES</label>
                     <input type="number" id="boxCount" value="5" min="0" max="50" class="setting-input">
                 </div>
+                <div class="setting-group">
+                    <label for="enableAliens">ALIENS</label>
+                    <input type="checkbox" id="enableAliens" class="setting-checkbox" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="oxygenDepletion">O2 DEPLETE</label>
+                    <input type="checkbox" id="oxygenDepletion" class="setting-checkbox" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="darkRoom">DARK</label>
+                    <input type="checkbox" id="darkRoom" class="setting-checkbox">
+                </div>
             </div>
 
             <div class="mode-selection"
                 style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
                 <div style="color: var(--dim-color); font-size: 12px; letter-spacing: 2px; margin-bottom: 5px;">SELECT
                     GAME MODE</div>
-                <button class="btn" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
+                <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
                 <button class="btn" onclick="startNewGame('ROB_BANK')">> ROB THE BANK</button>
                 <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
                 <button class="btn" onclick="startNewGame('KING_HILL')">> KING OF THE HILL</button>
@@ -253,18 +292,45 @@
             const enemies = document.getElementById('enemyCount').value;
             const droplets = document.getElementById('dropletCount').value;
             const boxes = document.getElementById('boxCount').value;
+            const darkRoom = document.getElementById('darkRoom').checked;
+            const enableAliens = document.getElementById('enableAliens').checked;
+            const oxygenDepletion = document.getElementById('oxygenDepletion').checked;
 
             // Store settings in session storage to keep URL clean
             const settings = {
                 enemyCount: parseInt(enemies),
                 dropletCount: parseInt(droplets),
                 boxCount: parseInt(boxes),
+                darkRoom: darkRoom,
+                enableAliens: enableAliens,
+                oxygenDepletion: oxygenDepletion,
                 gameMode: mode || 'SURVIVAL'
             };
             sessionStorage.setItem('roomSettings', JSON.stringify(settings));
 
             window.location.href = `game.html?room=${randomId}`;
         }
+
+        // Handle ENCLOSE button state based on aliens checkbox
+        const aliensCheckbox = document.getElementById('enableAliens');
+        const encloseButton = document.getElementById('btn-enclose');
+
+        function updateEncloseButton() {
+            if (!aliensCheckbox.checked) {
+                encloseButton.disabled = true;
+                encloseButton.style.opacity = '0.3';
+                encloseButton.style.cursor = 'not-allowed';
+                encloseButton.title = 'ENCLOSE requires aliens to be enabled';
+            } else {
+                encloseButton.disabled = false;
+                encloseButton.style.opacity = '1';
+                encloseButton.style.cursor = 'pointer';
+                encloseButton.title = '';
+            }
+        }
+
+        aliensCheckbox.addEventListener('change', updateEncloseButton);
+        updateEncloseButton(); // Initial state
 
         function joinGame() {
             const room = document.getElementById('roomInput').value.trim();

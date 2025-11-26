@@ -499,6 +499,9 @@ class GameRoom {
       dropletCount: settings.dropletCount !== undefined ? settings.dropletCount : 5,
       boxCount: settings.boxCount !== undefined ? settings.boxCount : 5,
       enemyCount: settings.enemyCount !== undefined ? settings.enemyCount : 3,
+      darkRoom: settings.darkRoom || false,
+      enableAliens: settings.enableAliens !== undefined ? settings.enableAliens : true,
+      oxygenDepletion: settings.oxygenDepletion !== undefined ? settings.oxygenDepletion : true,
       gameMode: settings.gameMode || MODES.SURVIVAL
     };
     console.log(`[Room ${roomId}] Created with settings:`, this.settings);
@@ -559,8 +562,10 @@ class GameRoom {
     this.chatHistory = [];
     this.maxChatHistory = 100; // Limit to last 100 messages
 
-    // Spawn initial aliens
-    this._spawnAliens(this.settings.enemyCount);
+    // Spawn initial aliens (only if enabled)
+    if (this.settings.enableAliens) {
+      this._spawnAliens(this.settings.enemyCount);
+    }
 
     // Start the game loop for this room
     this._startGameLoop();
@@ -1011,8 +1016,8 @@ class GameRoom {
           // Auto-collect items when moving onto them
           this.handleCollect(playerId, newX, newY);
 
-          // Decrease oxygen on move
-          if (player.oxygen > 0) {
+          // Decrease oxygen on move (if enabled)
+          if (this.settings.oxygenDepletion && player.oxygen > 0) {
             player.oxygen--;
           }
 
@@ -1170,44 +1175,91 @@ class GameRoom {
     if (this.alienTimer) clearInterval(this.alienTimer);
   }
 
-  _broadcastState() {
-    const stateUpdate = {
-      type: 'stateUpdate',
-      gameState: {
-        players: Array.from(this.players.values()).map(p => ({
+  /**
+   * Filter entities visible to a player based on their position
+   * Used for dark-room mode where visibility is limited
+   */
+  _getVisibleEntities(playerX, playerY, radius = 2) {
+    const isVisible = (x, y) => {
+      const dist = Math.max(Math.abs(x - playerX), Math.abs(y - playerY));
+      return dist <= radius;
+    };
+
+    return {
+      players: Array.from(this.players.values())
+        .filter(p => isVisible(p.x, p.y))
+        .map(p => ({
           id: p.id,
           x: p.x,
           y: p.y,
           color: p.color,
           isDead: p.isDead,
-          action: p.action, // Include action for all players
-          draggedWall: p.draggedWall // Include draggedWall for all players
+          action: p.action,
+          draggedWall: p.draggedWall
         })),
-        aliens: this.aliens.map(a => ({ x: a.x, y: a.y })),
-        boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })), // Include boxes
-        bombs: this.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn })),
-        phase: this.state.phase, // Include game phase
-        winner: this.state.winner, // Include winner
-        ...this.state.modeState // Include general mode state
-      },
-      timestamp: Date.now()
+      aliens: this.aliens
+        .filter(a => isVisible(a.x, a.y))
+        .map(a => ({ x: a.x, y: a.y })),
+      boxes: this.boxes
+        .filter(b => isVisible(b.x, b.y))
+        .map(b => ({ x: b.x, y: b.y, content: b.content })),
+      bombs: this.bombs
+        .filter(b => isVisible(b.x, b.y))
+        .map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn }))
     };
+  }
 
+  _broadcastState() {
     // Send to each player
     this.players.forEach(player => {
       if (player.ws.readyState === WebSocket.OPEN) {
-        // Personalize update (inventory and mode status)
+        let gameState;
+
+        // In dark-room mode, filter entities based on player's visibility
+        if (this.settings.darkRoom) {
+          const visibleEntities = this._getVisibleEntities(player.x, player.y);
+          gameState = {
+            ...visibleEntities,
+            phase: this.state.phase,
+            winner: this.state.winner,
+            ...this.state.modeState
+          };
+        } else {
+          // Normal mode: send all entities
+          gameState = {
+            players: Array.from(this.players.values()).map(p => ({
+              id: p.id,
+              x: p.x,
+              y: p.y,
+              color: p.color,
+              isDead: p.isDead,
+              action: p.action,
+              draggedWall: p.draggedWall
+            })),
+            aliens: this.aliens.map(a => ({ x: a.x, y: a.y })),
+            boxes: this.boxes.map(b => ({ x: b.x, y: b.y, content: b.content })),
+            bombs: this.bombs.map(b => ({ x: b.x, y: b.y, blinkOn: b.blinkOn })),
+            phase: this.state.phase,
+            winner: this.state.winner,
+            ...this.state.modeState
+          };
+        }
+
+        // Personalize update with inventory and mode status
         const personalUpdate = {
-          ...stateUpdate,
+          type: 'stateUpdate',
+          gameState: gameState,
+          darkRoom: this.settings.darkRoom,
+          playerPosition: { x: player.x, y: player.y },
           inventory: {
             bombs: player.bombs,
             oxygen: player.oxygen,
             jumps: player.jumps,
             dash: player.dash,
             isDead: player.isDead,
-            // Add Mode Status
             modeStatus: this._getModeStatus(player)
-          }
+          },
+          timestamp: Date.now()
         };
         player.ws.send(JSON.stringify(personalUpdate));
       }

@@ -67,6 +67,10 @@
     let winner = null;
     let started = false;
 
+    // Dark-room mode
+    let darkRoomMode = false;
+    let visibilityRadius = 2;
+
     // --- Helpers ---
 
     /**
@@ -159,6 +163,9 @@
      * Output: None (Updates DOM)
      */
     function render() {
+      // Safety check: don't render if DOM elements aren't ready
+      if (!screenEl) return;
+
       // 1. Pre-calculate lookups for performance
       const otherPlayerMap = new Map(otherPlayers.map(p => [`${p.x},${p.y}`, p]));
       const alienMap = new Set(aliens.map(a => `${a.x},${a.y}`));
@@ -184,6 +191,15 @@
      * Output: HTML string for the tile
      */
     function renderTile(x, y, otherPlayerMap, alienMap, bombMap) {
+      // Check visibility in dark-room mode
+      if (darkRoomMode) {
+        const dist = Math.max(Math.abs(x - player.x), Math.abs(y - player.y));
+        if (dist > visibilityRadius) {
+          // Outside visibility: render as empty/black
+          return '<span class="tile invisible">&nbsp;</span>';
+        }
+      }
+
       let ch = map[y][x];
       let classes = ['tile'];
       let style = '';
@@ -532,12 +548,20 @@
       };
     }
 
+    function updateDarkRoomMode(enabled) {
+      darkRoomMode = enabled;
+      // Only render if game has started (screenEl exists)
+      if (started && screenEl) {
+        render();
+      }
+    }
+
     return {
       start, stop, getState, render,
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
-      updateDragState, updateGamePhase
+      updateDragState, updateGamePhase, updateDarkRoomMode
     };
   }
 
