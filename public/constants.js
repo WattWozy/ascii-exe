@@ -5,7 +5,7 @@
         PLAYER: '@',
         PUSHABLE: 'o',
         PUMP: '*',
-        DROPLET: '•',
+        DROPLET: '+',
         BOX: 'Ø',
         BOMB: 'B',
         GOLD: '€',

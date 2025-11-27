@@ -11,6 +11,7 @@ class GameClient {
   constructor() {
     this.ws = null;
     this.playerId = null;
+    this.roomId = null;
     this.players = new Map();
     this.game = null;
     this.chatOpen = false;
@@ -236,6 +237,9 @@ class GameClient {
 
     this.loadChatHistory(data.chatHistory);
     this.game.start();
+
+    // Update HUD with player info
+    this.updateHUD();
   }
 
   /**
@@ -390,11 +394,30 @@ class GameClient {
   }
 
   /**
+   * Goal: Update the HUD with player name and room ID
+   * Input: None
+   * Output: None
+   */
+  updateHUD() {
+    const hudPlayerName = document.getElementById('hud-player-name');
+    const hudRoomId = document.getElementById('hud-room-id');
+
+    if (hudPlayerName && this.playerId) {
+      hudPlayerName.textContent = this.getPlayerName(this.playerId);
+    }
+
+    if (hudRoomId && this.roomId) {
+      hudRoomId.textContent = this.roomId;
+    }
+  }
+
+  /**
    * Goal: Join a specific game room.
    * Input: roomId (string), settings (object)
    * Output: None
    */
   joinRoom(roomId, settings = {}) {
+    this.roomId = roomId; // Store room ID for display
     const msg = { type: 'joinRoom', roomId, settings };
     if (this.ws.readyState === WebSocket.OPEN) {
       this.send(msg);
