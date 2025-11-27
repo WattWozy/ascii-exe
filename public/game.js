@@ -71,6 +71,70 @@
     let darkRoomMode = false;
     let visibilityRadius = 2;
 
+    // --- Canvas Renderer Setup ---
+    const useCanvas = screenEl && screenEl.tagName === 'CANVAS';
+    const TILE_SIZE = 20; // Tile size in pixels for canvas rendering
+    let canvasCtx = null;
+    let previousFrame = null; // For dirty-diff optimization
+    let renderScheduled = false;
+
+    // Color mapping for canvas renderer
+    const COLOR_MAP = {
+      wall: '#e8eef6',
+      floor: '#070707',
+      player: '#7cd67c',
+      alien: '#ff66b2',
+      pump: '#4fc3ff',
+      box: '#ea00ff',
+      box_filled: '#ea00ff',
+      box_empty: '#ea00ff',
+      map_bomb: '#ffeb3b',
+      droplet: '#7fe0ff',
+      gold: '#7cd67c',
+      bank: '#ffd700',
+      flag_red: '#ff4444',
+      flag_blue: '#4444ff',
+      base_red: '#aa0000',
+      base_blue: '#0000aa',
+      hill: '#ffff00',
+      bomb_on: '#ff6666',
+      bomb_off: '#ffeb3b',
+      dragging: '#ffaa00',
+      invisible: '#070707'
+    };
+
+    if (useCanvas) {
+      canvasCtx = screenEl.getContext('2d', { alpha: false });
+      // Initialize canvas dimensions based on map size
+      const dpr = window.devicePixelRatio || 1;
+
+      // Set canvas internal resolution (high DPI aware)
+      const canvasWidth = width * TILE_SIZE;
+      const canvasHeight = height * TILE_SIZE;
+
+      screenEl.width = canvasWidth * dpr;
+      screenEl.height = canvasHeight * dpr;
+
+      // Set display size to match expected visual size
+      screenEl.style.width = `${canvasWidth}px`;
+      screenEl.style.height = `${canvasHeight}px`;
+
+      // Scale context for high DPI
+      canvasCtx.scale(dpr, dpr);
+
+      // Set font for ASCII rendering (must match tileSize)
+      canvasCtx.font = `bold ${TILE_SIZE - 4}px monospace`;
+      canvasCtx.textAlign = 'center';
+      canvasCtx.textBaseline = 'middle';
+
+      // Fill initial background
+      canvasCtx.fillStyle = COLOR_MAP.floor;
+      canvasCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      console.log('[Canvas Renderer] Enabled - GPU acceleration active');
+      console.log(`[Canvas] Size: ${width}x${height} @ ${TILE_SIZE}px/tile = ${canvasWidth}x${canvasHeight}px`);
+    }
+
     // --- Helpers ---
 
     /**
@@ -158,20 +222,174 @@
     // --- Rendering ---
 
     /**
-     * Goal: Render the entire game state to the DOM.
-     * Input: None
-     * Output: None (Updates DOM)
+     * Goal: Get tile data for rendering (used by both canvas and DOM renderers)
+     * Input: x, y, lookup maps
+     * Output: Object with { char, color, classes }
      */
-    function render() {
-      // Safety check: don't render if DOM elements aren't ready
-      if (!screenEl) return;
+    function getTileData(x, y, otherPlayerMap, alienMap, bombMap) {
+      // Check visibility in dark-room mode
+      if (darkRoomMode) {
+        const dist = Math.max(Math.abs(x - player.x), Math.abs(y - player.y));
+        if (dist > visibilityRadius) {
+          return { char: ' ', color: COLOR_MAP.invisible, classes: ['invisible'] };
+        }
+      }
 
-      // 1. Pre-calculate lookups for performance
+      let ch = map[y][x];
+      let color = COLOR_MAP.wall;
+      let classes = [];
+      const key = `${x},${y}`;
+
+      // Entity Layering: Other Players -> Local Player -> Aliens -> Map Tiles
+
+      // Other Players
+      const otherP = otherPlayerMap.get(key);
+      if (otherP && !otherP.isDead) {
+        ch = TILE_PLAYER;
+        color = otherP.color || COLOR_MAP.player;
+        classes.push('player');
+      }
+      // Local Player
+      else if (player.x === x && player.y === y && !playerState.isDead) {
+        ch = TILE_PLAYER;
+        color = COLOR_MAP.player;
+        classes.push('player');
+      }
+      // Aliens
+      else if (alienMap.has(key)) {
+        ch = '👾';
+        color = COLOR_MAP.alien;
+        classes.push('alien');
+      }
+      // Map Tiles
+      else {
+        if (ch === TILE_FLOOR) {
+          ch = ' ';
+          color = COLOR_MAP.floor;
+        }
+        else if (ch === TILE_WALL) color = COLOR_MAP.wall;
+        else if (ch === TILE_PUSH) {
+          color = (draggedWall && draggedWall.x === x && draggedWall.y === y)
+            ? COLOR_MAP.dragging : COLOR_MAP.wall;
+          if (draggedWall && draggedWall.x === x && draggedWall.y === y) classes.push('dragging');
+        }
+        else if (ch === TILE_PUMP) { color = COLOR_MAP.pump; classes.push('pump'); }
+        else if (ch === (mapOpts.boxSymbol || window.TILES?.BOX || 'Ø')) {
+          const box = findBoxAt(x, y);
+          color = COLOR_MAP.box;
+          classes.push(box && box.content ? 'box-filled' : 'box-empty');
+        }
+        else if (ch === (mapOpts.bombSymbol || window.TILES?.BOMB || 'B')) {
+          color = COLOR_MAP.map_bomb;
+          classes.push('map-bomb');
+        }
+        else if (ch === TILE_DROPLET) { color = COLOR_MAP.droplet; classes.push('droplet'); }
+        else if (ch === TILE_GOLD) { color = COLOR_MAP.gold; classes.push('gold'); }
+        else if (ch === TILE_BANK) { color = COLOR_MAP.bank; classes.push('bank'); }
+        else if (ch === TILE_FLAG_RED) { color = COLOR_MAP.flag_red; classes.push('flag-red'); }
+        else if (ch === TILE_FLAG_BLUE) { color = COLOR_MAP.flag_blue; classes.push('flag-blue'); }
+        else if (ch === TILE_BASE_RED) { color = COLOR_MAP.base_red; classes.push('base-red'); }
+        else if (ch === TILE_BASE_BLUE) { color = COLOR_MAP.base_blue; classes.push('base-blue'); }
+        else if (ch === TILE_HILL) { color = COLOR_MAP.hill; classes.push('hill'); }
+      }
+
+      // Bombs (Overlay)
+      const b = bombMap.get(key);
+      if (b) {
+        color = b.blinkOn ? COLOR_MAP.bomb_on : COLOR_MAP.bomb_off;
+        classes.push('bomb');
+        if (b.blinkOn) classes.push('bomb-on');
+      }
+
+      return { char: ch, color, classes };
+    }
+
+    /**
+     * Goal: Render using Canvas (GPU-accelerated with dirty-diff)
+     * Input: None
+     * Output: None (Draws to canvas)
+     */
+    function renderCanvas() {
+      if (!canvasCtx) return;
+
       const otherPlayerMap = new Map(otherPlayers.map(p => [`${p.x},${p.y}`, p]));
       const alienMap = new Set(aliens.map(a => `${a.x},${a.y}`));
       const bombMap = new Map(bombs.map(b => [`${b.x},${b.y}`, b]));
 
-      // 2. Build Grid HTML
+      // Build current frame snapshot
+      const currentFrame = [];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const tileData = getTileData(x, y, otherPlayerMap, alienMap, bombMap);
+          currentFrame.push(tileData);
+        }
+      }
+
+      // Dirty-diff: Only redraw changed tiles
+      let changedTiles = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          const curr = currentFrame[idx];
+          const prev = previousFrame?.[idx];
+
+          // Check if tile changed
+          if (!prev || prev.char !== curr.char || prev.color !== curr.color) {
+            changedTiles++;
+
+            // Clear tile area
+            const tx = x * TILE_SIZE;
+            const ty = y * TILE_SIZE;
+            canvasCtx.fillStyle = COLOR_MAP.floor;
+            canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+
+            // Draw character if not empty
+            if (curr.char && curr.char !== ' ') {
+              canvasCtx.fillStyle = curr.color;
+              canvasCtx.fillText(curr.char, tx + TILE_SIZE / 2, ty + TILE_SIZE / 2);
+            }
+          }
+        }
+      }
+
+      // Store current frame for next diff
+      previousFrame = currentFrame;
+
+      // Performance logging (throttled)
+      if (changedTiles > 0 && Math.random() < 0.01) {
+        console.log(`[Canvas] Rendered ${changedTiles}/${width * height} tiles`);
+      }
+    }
+
+    /**
+     * Goal: Schedule a throttled render (prevents excessive redraws)
+     * Input: None
+     * Output: None
+     */
+    function scheduleRender() {
+      if (renderScheduled) return;
+      renderScheduled = true;
+      requestAnimationFrame(() => {
+        renderScheduled = false;
+        if (useCanvas) {
+          renderCanvas();
+        } else {
+          renderDOM();
+        }
+        updateUI();
+      });
+    }
+
+    /**
+     * Goal: Render using DOM (legacy fallback)
+     * Input: None
+     * Output: None (Updates DOM innerHTML)
+     */
+    function renderDOM() {
+      const otherPlayerMap = new Map(otherPlayers.map(p => [`${p.x},${p.y}`, p]));
+      const alienMap = new Set(aliens.map(a => `${a.x},${a.y}`));
+      const bombMap = new Map(bombs.map(b => [`${b.x},${b.y}`, b]));
+
       let out = '';
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -180,9 +398,19 @@
         out += '<br/>';
       }
       screenEl.innerHTML = out;
+    }
 
-      // 3. Update UI Elements
-      updateUI();
+    /**
+     * Goal: Render the entire game state to the DOM.
+     * Input: None
+     * Output: None (Updates DOM)
+     */
+    function render() {
+      // Safety check: don't render if DOM elements aren't ready
+      if (!screenEl) return;
+
+      // Use throttled rendering system
+      scheduleRender();
     }
 
     /**
