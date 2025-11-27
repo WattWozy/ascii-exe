@@ -25,7 +25,7 @@
       TILE_PLAYER = (window.TILES && window.TILES.PLAYER) || '@',
       TILE_PUSH = (window.TILES && window.TILES.PUSHABLE) || 'o',
       TILE_PUMP = (window.TILES && window.TILES.PUMP) || '*',
-      TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '•',
+      TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '+',
       TILE_GOLD = (window.TILES && window.TILES.GOLD) || '€',
       TILE_BANK = (window.TILES && window.TILES.BANK) || '$',
       TILE_FLAG_RED = (window.TILES && window.TILES.FLAG_RED) || 'P',
