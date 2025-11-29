@@ -201,6 +201,9 @@
     function canWalk(nx, ny, dx = 0, dy = 0) {
       if (!window.isWalkable(map, nx, ny, width, height, TILE_WALL)) return false;
 
+      // Check for other players
+      if (otherPlayers.some(p => p.x === nx && p.y === ny && !p.isDead)) return false;
+
       const tile = map[ny][nx];
 
       // Handle Pushable Walls

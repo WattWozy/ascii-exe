@@ -1011,6 +1011,16 @@ class GameRoom {
         const newY = Math.max(0, Math.min(this.height - 1, data.y));
         // Check if the target tile is walkable using shared logic
         if (isWalkable(this.map, newX, newY, this.width, this.height, TILES.WALL)) {
+          // Check for player collision
+          let occupied = false;
+          for (const [pid, p] of this.players) {
+            if (pid !== playerId && p.x === newX && p.y === newY && !p.isDead) {
+              occupied = true;
+              break;
+            }
+          }
+          if (occupied) return;
+
           const oldX = player.x;
           const oldY = player.y;
 
@@ -1465,6 +1475,16 @@ wss.on('connection', (ws, req) => {
       if (currentRoom && playerId) {
         if (data.type === 'startGame') {
           currentRoom.startGame(playerId);
+        } else if (data.type === 'voice-signal') {
+          // Relay voice signal to target player
+          const targetPlayer = currentRoom.players.get(data.targetId);
+          if (targetPlayer && targetPlayer.ws.readyState === WebSocket.OPEN) {
+            targetPlayer.ws.send(JSON.stringify({
+              type: 'voice-signal',
+              senderId: playerId,
+              signal: data.signal
+            }));
+          }
         } else {
           currentRoom.handlePlayerInput(playerId, data);
         }

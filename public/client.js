@@ -30,6 +30,9 @@ class GameClient {
 
     this.connect();
     this.initChat();
+
+    // Voice Chat
+    this.voiceManager = window.VoiceManager ? new window.VoiceManager(this) : null;
   }
 
   /**
@@ -40,7 +43,7 @@ class GameClient {
   initChat() {
     if (!this.dom.chatInput || !this.dom.chatContainer || !this.dom.chatMessages) return;
 
-    // Global key handler for chat toggle
+    // Global key handler for chat toggle and voice
     document.addEventListener('keydown', (e) => {
       // Ignore if typing in an input field
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
@@ -50,6 +53,9 @@ class GameClient {
         e.preventDefault();
       } else if (e.key === 'Escape' && this.chatOpen) {
         this.toggleChat(false);
+        e.preventDefault();
+      } else if (e.key.toLowerCase() === 'm') {
+        this.voiceManager?.toggleMute();
         e.preventDefault();
       }
     }, true);
@@ -193,7 +199,8 @@ class GameClient {
       'playerLeft': () => this.handlePlayerLeft(data),
       'chat': () => this.handleChat(data),
       'lobbyUpdate': () => this.handleLobbyUpdate(data),
-      'gameStarted': () => this.handleGameStarted(data)
+      'gameStarted': () => this.handleGameStarted(data),
+      'voice-signal': () => this.voiceManager?.handleSignal(data)
     };
 
     if (handlers[data.type]) {
@@ -374,6 +381,8 @@ class GameClient {
 
     if (data.player.id !== this.playerId) {
       this.addChatMessage(`${window.getPlayerName(data.player.id)} joined the room`, true);
+      // Initiate voice connection to new player
+      this.voiceManager?.createPeerConnection(data.player.id, true);
     }
     this.game?.updateOtherPlayers?.(this.getOtherPlayers());
   }
@@ -387,6 +396,7 @@ class GameClient {
     this.players.delete(data.playerId);
     console.log('Player left:', data.playerId);
     this.addChatMessage(`${this.getPlayerName(data.playerId)} left the room`, true);
+    this.voiceManager?.removePeer(data.playerId);
   }
 
   /**
