@@ -191,12 +191,65 @@ class GameClient {
       'bombUpdate': () => this.game?.updateBomb?.(data.bomb),
       'playerJoined': () => this.handlePlayerJoined(data),
       'playerLeft': () => this.handlePlayerLeft(data),
-      'chat': () => this.handleChat(data)
+      'chat': () => this.handleChat(data),
+      'lobbyUpdate': () => this.handleLobbyUpdate(data),
+      'gameStarted': () => this.handleGameStarted(data)
     };
 
     if (handlers[data.type]) {
       handlers[data.type]();
     }
+  }
+
+  handleLobbyUpdate(data) {
+    const lobbyOverlay = document.getElementById('lobby-overlay');
+    const roomIdEl = document.getElementById('lobby-room-id');
+    const playerListEl = document.getElementById('lobby-player-list');
+    const startBtn = document.getElementById('btn-start-game');
+    const waitingMsg = document.getElementById('lobby-waiting-msg');
+
+    if (!lobbyOverlay) return;
+
+    // Show lobby if phase is LOBBY
+    if (data.phase === 'LOBBY') {
+      lobbyOverlay.style.display = 'flex';
+    } else {
+      lobbyOverlay.style.display = 'none';
+      return;
+    }
+
+    if (roomIdEl) roomIdEl.textContent = data.roomId;
+
+    // Update player list
+    if (playerListEl) {
+      playerListEl.innerHTML = '';
+      data.players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'lobby-player';
+        div.style.color = p.color;
+        const isMe = p.id === this.playerId;
+        div.innerHTML = `${p.name}${isMe ? ' (YOU)' : ''} ${p.isHost ? '<span style="color:#ffd700">[HOST]</span>' : ''}`;
+        playerListEl.appendChild(div);
+      });
+    }
+
+    // Show/Hide Start Button based on host status
+    const isHost = data.hostId === this.playerId;
+    if (startBtn) startBtn.style.display = isHost ? 'inline-block' : 'none';
+    if (waitingMsg) waitingMsg.style.display = isHost ? 'none' : 'block';
+  }
+
+  handleGameStarted(data) {
+    const lobbyOverlay = document.getElementById('lobby-overlay');
+    if (lobbyOverlay) lobbyOverlay.style.display = 'none';
+
+    if (this.game) {
+      this.game.updateGamePhase?.(data.phase);
+    }
+  }
+
+  sendStartGame() {
+    this.send({ type: 'startGame' });
   }
 
   /**

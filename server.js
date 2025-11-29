@@ -570,8 +570,9 @@ class GameRoom {
     // Start the game loop for this room
     this._startGameLoop();
 
-    // Auto-start game when created (for now)
-    this.state.setPhase(PHASES.PLAYING);
+    // Host management
+    this.hostId = null;
+    this.state.setPhase(PHASES.LOBBY);
 
     // Cleanup timer
     this.cleanupTimer = null;
@@ -739,6 +740,11 @@ class GameRoom {
       isDead: false
     };
 
+    // Assign host if none exists
+    if (!this.hostId) {
+      this.hostId = playerId;
+    }
+
     this.players.set(playerId, player);
 
     // Mode-specific join logic (e.g. team assignment)
@@ -755,6 +761,22 @@ class GameRoom {
 
   removePlayer(playerId) {
     this.players.delete(playerId);
+
+    // Host migration
+    if (playerId === this.hostId) {
+      this.hostId = null;
+      if (this.players.size > 0) {
+        // Assign next player as host
+        this.hostId = this.players.keys().next().value;
+        this.chatHistory.push({
+          type: 'system',
+          message: `${getPlayerName(this.hostId)} is now the host`,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    this.broadcastLobbyState();
 
     // If room is empty, start cleanup timer
     if (this.players.size === 0) {
@@ -866,6 +888,15 @@ class GameRoom {
     if (toX < 0 || toY < 0 || toX >= this.width || toY >= this.height) return false;
     if (!this.map[fromY] || this.map[fromY][fromX] !== TILES.PUSHABLE) return false; // Must be pushable
     if (!this.map[toY] || this.map[toY][toX] !== TILES.FLOOR) return false; // Destination must be floor
+
+    // Check if this wall is being dragged by someone
+    let isBeingDragged = false;
+    this.players.forEach(p => {
+      if (p.draggedWall && p.draggedWall.x === fromX && p.draggedWall.y === fromY) {
+        isBeingDragged = true;
+      }
+    });
+    if (isBeingDragged) return false;
 
     // Perform push
     this.map[fromY][fromX] = TILES.FLOOR;
@@ -991,24 +1022,28 @@ class GameRoom {
             const wallX = player.draggedWall.x;
             const wallY = player.draggedWall.y;
 
-            // Check if old position is valid for wall placement
-            if (this.map[oldY] && this.map[oldY][oldX] === TILES.FLOOR) {
-              // Move wall from current position to player's old position
-              this.map[wallY][wallX] = TILES.FLOOR;
-              this.map[oldY][oldX] = TILES.PUSHABLE;
+            // Verify wall still exists (it might have been destroyed or pushed)
+            if (this.map[wallY] && this.map[wallY][wallX] === TILES.PUSHABLE) {
+              // Check if old position is valid for wall placement
+              if (this.map[oldY] && this.map[oldY][oldX] === TILES.FLOOR) {
+                // Move wall from current position to player's old position
+                this.map[wallY][wallX] = TILES.FLOOR;
+                this.map[oldY][oldX] = TILES.PUSHABLE;
 
+                // Update dragged wall coordinates
+                player.draggedWall = { x: oldX, y: oldY };
 
-
-              // Update dragged wall coordinates
-              player.draggedWall = { x: oldX, y: oldY };
-
-              // Broadcast map changes
-              this.broadcastMapChange([
-                { x: wallX, y: wallY, tile: TILES.FLOOR },
-                { x: oldX, y: oldY, tile: TILES.PUSHABLE }
-              ]);
+                // Broadcast map changes
+                this.broadcastMapChange([
+                  { x: wallX, y: wallY, tile: TILES.FLOOR },
+                  { x: oldX, y: oldY, tile: TILES.PUSHABLE }
+                ]);
+              } else {
+                // Can't place wall (blocked), release it
+                player.draggedWall = null;
+              }
             } else {
-              // Can't place wall, release it
+              // Wall is gone, release drag
               player.draggedWall = null;
             }
           }
@@ -1274,6 +1309,40 @@ class GameRoom {
       }
     });
   }
+
+  broadcastLobbyState() {
+    const playerList = Array.from(this.players.values()).map(p => ({
+      id: p.id,
+      name: getPlayerName(p.id),
+      color: p.color,
+      isHost: p.id === this.hostId
+    }));
+
+    this.broadcast({
+      type: 'lobbyUpdate',
+      players: playerList,
+      hostId: this.hostId,
+      roomId: this.roomId,
+      phase: this.state.phase
+    });
+  }
+
+  startGame(playerId) {
+    if (playerId !== this.hostId) return; // Only host can start
+    if (this.state.phase !== PHASES.LOBBY) return;
+
+    this.state.setPhase(PHASES.PLAYING);
+    this.broadcast({
+      type: 'gameStarted',
+      phase: PHASES.PLAYING
+    });
+
+    this.chatHistory.push({
+      type: 'system',
+      message: 'Game Started!',
+      timestamp: Date.now()
+    });
+  }
 }
 
 // Get or create a room
@@ -1337,6 +1406,9 @@ wss.on('connection', (ws, req) => {
           chatHistory: currentRoom.chatHistory // Send chat history to new player
         }));
 
+        // Broadcast lobby update AFTER init so client knows its playerId
+        currentRoom.broadcastLobbyState();
+
         // Notify others in room
         const newPlayer = currentRoom.players.get(playerId);
         const joinMessage = {
@@ -1391,7 +1463,11 @@ wss.on('connection', (ws, req) => {
 
       // Handle game inputs
       if (currentRoom && playerId) {
-        currentRoom.handlePlayerInput(playerId, data);
+        if (data.type === 'startGame') {
+          currentRoom.startGame(playerId);
+        } else {
+          currentRoom.handlePlayerInput(playerId, data);
+        }
       }
     } catch (e) {
       console.error('Invalid message:', e);

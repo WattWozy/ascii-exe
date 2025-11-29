@@ -77,6 +77,24 @@
       </div>
     </div>
   </div>
+
+  <!-- Lobby Overlay -->
+  <div id="lobby-overlay" class="overlay" style="display: none;">
+    <div class="overlay-content">
+      <h1>LOBBY</h1>
+      <div class="lobby-info">
+        <p>ROOM: <span id="lobby-room-id" style="color: #fff;">...</span></p>
+        <div id="lobby-player-list" class="player-list">
+          <!-- Players will be listed here -->
+        </div>
+      </div>
+      <div class="lobby-controls">
+        <p id="lobby-waiting-msg" class="blink">WAITING FOR HOST...</p>
+        <button id="btn-start-game" class="btn" style="display: none;" onclick="window.gameClient.sendStartGame()">START
+          GAME</button>
+      </div>
+    </div>
+  </div>
   <script src="constants.js"></script>
   <script src="utils.js"></script>
   <script src="mapgen.js"></script>

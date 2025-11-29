@@ -2,8 +2,9 @@
 [ ] voice-chat functionality.
 [X] predefined maps? rob the bank for example? 
 [ ] semi-defined maps: hardcoded to a limit, randomized to another.
-[ ] important: lock on stuff to drag
+[X] important: lock on stuff to drag
 [ ] important: race conditions on knife attacks.
+[X] lobby for starting the game.
 ->
 
 [ ] alien-ai: in enclose mode: aliens must know how to target people.
