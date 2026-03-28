@@ -12,6 +12,7 @@ class GameClient {
     this.ws = null;
     this.playerId = null;
     this.roomId = null;
+    this._disconnecting = false;
     this.players = new Map();
     this.game = null;
     this.chatOpen = false;
@@ -30,6 +31,7 @@ class GameClient {
 
     this.connect();
     this.initChat();
+    window.addEventListener('beforeunload', () => { this._disconnecting = true; });
 
     // Voice Chat
     this.voiceManager = window.VoiceManager ? new window.VoiceManager(this) : null;
@@ -166,7 +168,9 @@ class GameClient {
     this.ws.onmessage = (event) => this.handleMessage(JSON.parse(event.data));
     this.ws.onclose = () => {
       console.log('Disconnected from server');
-      setTimeout(() => this.connect(), 2000);
+      if (!this._disconnecting) {
+        setTimeout(() => this.connect(), 2000);
+      }
     };
     this.ws.onerror = (error) => console.error('WebSocket error:', error);
   }

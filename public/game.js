@@ -551,7 +551,7 @@
         <div style="background: rgba(13, 17, 23, 0.95); padding: 32px; border: 2px solid ${color}; border-radius: 12px; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px ${color}40; min-width: 300px; backdrop-filter: blur(4px); pointer-events: auto;">
           <h1 style="color: ${color}; margin: 0 0 8px 0; font-size: 32px; text-shadow: 0 0 10px ${color}40; letter-spacing: 2px;">${title}</h1>
           <p style="color: #aab3c2; margin: 0 0 24px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">${subtext}</p>
-          <button onclick="window.location.href='/'" style="background: rgba(255,255,255,0.05); color: #e8eef6; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 16px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;">
+          <button onclick="if(window.gameClient) window.gameClient._disconnecting=true; window.location.href='/'" style="background: rgba(255,255,255,0.05); color: #e8eef6; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 16px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
           </button>
         </div>`;
@@ -769,7 +769,7 @@
       currentPhase = phase;
       winner = win;
       render();
-      if (phase === 'GAME_OVER') setTimeout(() => window.location.href = '/', 5000);
+      if (phase === 'GAME_OVER') setTimeout(() => { if (window.gameClient) window.gameClient._disconnecting = true; window.location.href = '/'; }, 5000);
     }
 
     function getState() {

@@ -575,20 +575,6 @@ class GameRoom {
     this.hostId = null;
     this.state.setPhase(PHASES.LOBBY);
 
-    // Cleanup timer
-    this.cleanupTimer = null;
-    this._resetCleanupTimer();
-  }
-
-  _resetCleanupTimer() {
-    if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
-    this.cleanupTimer = setTimeout(() => {
-      if (this.players.size === 0) {
-        console.log(`Room ${this.roomId} closed (empty)`);
-        this._stopGameLoop();
-        delete rooms[this.roomId];
-      }
-    }, 10000); // 10 seconds
   }
 
 
@@ -753,11 +739,6 @@ class GameRoom {
       this.modeHandler.onPlayerJoin(player);
     }
 
-    // Reset cleanup timer since a player joined
-    if (this.cleanupTimer) {
-      clearTimeout(this.cleanupTimer);
-      this.cleanupTimer = null;
-    }
   }
 
   removePlayer(playerId) {
@@ -779,27 +760,11 @@ class GameRoom {
 
     this.broadcastLobbyState();
 
-    // If room is empty, start cleanup timer
+    // If room is empty, close it immediately
     if (this.players.size === 0) {
-      this._resetCleanupTimer();
-    }
-
-    // Clean up empty rooms
-    if (this.players.size === 0) {
-      // If game is over, close immediately (or very quickly) so players can restart
-      // Otherwise wait 5 minutes
-      const timeoutDuration = (this.state.phase === PHASES.GAME_OVER) ? 500 : 5 * 60 * 1000;
-
-      setTimeout(() => {
-        if (this.players.size === 0) {
-          delete rooms[this.roomId];
-          clearInterval(this.gameLoopInterval);
-          if (this.alienTimer) {
-            clearInterval(this.alienTimer);
-          }
-          console.log(`Room ${this.roomId} closed (empty)`);
-        }
-      }, timeoutDuration);
+      this._stopGameLoop();
+      delete rooms[this.roomId];
+      console.log(`Room ${this.roomId} closed (all players left)`);
     }
   }
 
@@ -1618,7 +1583,7 @@ function getLocalIP() {
 
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
+      if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('169.254.')) {
         return net.address;
       }
     }
