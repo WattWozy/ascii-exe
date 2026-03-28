@@ -11,7 +11,7 @@
     -> can aliens also destroy stuff?
 
   Highest bang-for-buck picks that fit your existing architecture:
-  1. Target-Acquired mode — server-side A* on the alien tick, just swap the movement logic  
+  1. [X] Target-Acquired mode — server-side A* on the alien tick, just swap the movement logic  
   2. Sound effects — pure client-side, zero server changes
   3. Random events — server broadcasts an event message every N ticks, clients react        
   4. Knife — already scoped in your to-do, fits the existing input→server→validate pattern

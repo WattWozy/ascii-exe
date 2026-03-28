@@ -200,7 +200,8 @@ class GameClient {
       'chat': () => this.handleChat(data),
       'lobbyUpdate': () => this.handleLobbyUpdate(data),
       'gameStarted': () => this.handleGameStarted(data),
-      'voice-signal': () => this.voiceManager?.handleSignal(data)
+      'voice-signal': () => this.voiceManager?.handleSignal(data),
+      'targetAcquiredChanged': () => this.updateTargetAcquiredButton(data.active)
     };
 
     if (handlers[data.type]) {
@@ -257,6 +258,18 @@ class GameClient {
 
   sendStartGame() {
     this.send({ type: 'startGame' });
+  }
+
+  toggleTargetAcquired() {
+    this.send({ type: 'toggleTargetAcquired' });
+  }
+
+  updateTargetAcquiredButton(active) {
+    const btn = document.getElementById('btn-target-acquired');
+    if (!btn) return;
+    btn.textContent = `TARGET ACQUIRED: ${active ? 'ON' : 'OFF'}`;
+    btn.style.color = active ? '#ff4444' : '#7b8596';
+    btn.style.borderColor = active ? '#ff4444' : '#444';
   }
 
   /**

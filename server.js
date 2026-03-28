@@ -547,7 +547,8 @@ class GameRoom {
 
     // Aliens list - managed server-side for synchronization
     this.aliens = [];
-    this.alienTickMs = 700; // Alien movement interval
+    this.alienBaseTickMs = 700; // Base alien movement interval
+    this.targetAcquired = false; // When true, aliens use BFS to hunt nearest player
 
 
 
@@ -1073,6 +1074,15 @@ class GameRoom {
         }
         break;
 
+      case 'toggleTargetAcquired':
+        this.targetAcquired = !this.targetAcquired;
+        this._restartAlienTimer();
+        this.broadcast({
+          type: 'targetAcquiredChanged',
+          active: this.targetAcquired
+        });
+        break;
+
       case 'action':
         if (data.action === 'collect') {
           this.handleCollect(playerId, data.x, data.y);
@@ -1121,46 +1131,93 @@ class GameRoom {
     }
   }
 
+  // BFS: returns the first step an alien at (ax, ay) should take toward the nearest active player.
+  // Returns [nx, ny] or null if no path found.
+  _alienBfsStep(ax, ay, aliensSelf) {
+    const activePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
+    if (activePlayers.length === 0) return null;
+
+    const alienPositions = new Set(this.aliens.filter(a => a !== aliensSelf).map(a => `${a.x},${a.y}`));
+    const targets = new Set(activePlayers.map(p => `${p.x},${p.y}`));
+    const deltas = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+    // BFS from alien position
+    const visited = new Set([`${ax},${ay}`]);
+    // Queue entries: [x, y, firstStepX, firstStepY]
+    const queue = [];
+
+    for (const [dx, dy] of deltas) {
+      const nx = ax + dx, ny = ay + dy;
+      if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      const tile = this.map[ny]?.[nx];
+      if (tile !== TILES.FLOOR) continue;
+      visited.add(key);
+      if (targets.has(key)) return [nx, ny]; // adjacent player — move there
+      if (!alienPositions.has(key)) queue.push([nx, ny, nx, ny]);
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+      const [cx, cy, fx, fy] = queue[head++];
+      for (const [dx, dy] of deltas) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
+        const key = `${nx},${ny}`;
+        if (visited.has(key)) continue;
+        const tile = this.map[ny]?.[nx];
+        if (tile !== TILES.FLOOR) continue;
+        visited.add(key);
+        if (targets.has(key)) return [fx, fy]; // found a player — return first step
+        if (!alienPositions.has(key)) queue.push([nx, ny, fx, fy]);
+      }
+    }
+
+    return null; // no path found
+  }
+
   _stepAliens() {
-    const TILE_DROPLET = '•';
+    const deltas = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
     // Iterate from end so we can splice safely
     for (let i = this.aliens.length - 1; i >= 0; i--) {
       const a = this.aliens[i];
       const ax = a.x, ay = a.y;
-      const candidates = [];
-      const deltas = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
       // Get all player positions to avoid collisions
       const playerPositions = new Set();
       this.players.forEach(p => {
-        playerPositions.add(`${p.x},${p.y}`);
+        if (!p.isDead) playerPositions.add(`${p.x},${p.y}`);
       });
 
-      for (const [dx, dy] of deltas) {
-        const nx = ax + dx, ny = ay + dy;
-        if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
+      let chosenTile = null;
 
-        // Can only move into floor tiles (cannot push or move into pumps/droplets/aliens/players)
-        if (this.map[ny] && this.map[ny][nx] === TILES.FLOOR && !playerPositions.has(`${nx},${ny}`)) {
-          // Also check if another alien is at this position
-          const alienAtPos = this.aliens.some(other => other !== a && other.x === nx && other.y === ny);
-          if (!alienAtPos) {
-            candidates.push([nx, ny]);
+      if (this.targetAcquired) {
+        // BFS toward nearest player, ignoring player tiles as obstacles (alien kills on contact)
+        chosenTile = this._alienBfsStep(ax, ay, a);
+      }
+
+      if (!chosenTile) {
+        // Random walk (fallback or default mode)
+        const candidates = [];
+        for (const [dx, dy] of deltas) {
+          const nx = ax + dx, ny = ay + dy;
+          if (nx < 0 || ny < 0 || nx >= this.width || ny >= this.height) continue;
+          if (this.map[ny] && this.map[ny][nx] === TILES.FLOOR && !playerPositions.has(`${nx},${ny}`)) {
+            const alienAtPos = this.aliens.some(other => other !== a && other.x === nx && other.y === ny);
+            if (!alienAtPos) candidates.push([nx, ny]);
           }
         }
+        if (candidates.length === 0) {
+          this.aliens.splice(i, 1);
+          continue;
+        }
+        chosenTile = candidates[Math.floor(Math.random() * candidates.length)];
       }
 
-      if (candidates.length === 0) {
-        // Trapped: remove alien (could turn into droplet, but for now just remove)
-        this.aliens.splice(i, 1);
-        continue;
-      }
-
-      // Pick a random candidate and move
-      const [nx, ny] = candidates[Math.floor(Math.random() * candidates.length)];
-      a.x = nx;
-      a.y = ny;
+      a.x = chosenTile[0];
+      a.y = chosenTile[1];
     }
   }
 
@@ -1202,6 +1259,17 @@ class GameRoom {
     return null;
   }
 
+  _getAlienTickMs() {
+    return this.targetAcquired ? this.alienBaseTickMs / 2 : this.alienBaseTickMs;
+  }
+
+  _restartAlienTimer() {
+    if (this.alienTimer) clearInterval(this.alienTimer);
+    this.alienTimer = setInterval(() => {
+      this._stepAliens();
+    }, this._getAlienTickMs());
+  }
+
   _startGameLoop() {
     const TICK_RATE = 60;
     this.gameLoopInterval = setInterval(() => {
@@ -1212,7 +1280,7 @@ class GameRoom {
     // Separate timer for alien movement (slower than game loop)
     this.alienTimer = setInterval(() => {
       this._stepAliens();
-    }, this.alienTickMs);
+    }, this._getAlienTickMs());
   }
 
   _stopGameLoop() {
@@ -1295,6 +1363,7 @@ class GameRoom {
           type: 'stateUpdate',
           gameState: gameState,
           darkRoom: this.settings.darkRoom,
+          targetAcquired: this.targetAcquired,
           playerPosition: { x: player.x, y: player.y },
           inventory: {
             bombs: player.bombs,
