@@ -8,7 +8,7 @@
                connect-src 'self' ws://localhost:* ws://*:3000; 
                script-src 'self' 'unsafe-inline'; 
                style-src 'self' 'unsafe-inline';">
-  <title>ASCIINAUT — ROOM</title>
+  <title>ARTEMIS II</title>
   <link rel="stylesheet" href="gamestyles.css">
 </head>
 
@@ -55,6 +55,7 @@
       <div id="screen-wrapper" style="position: relative;">
         <canvas id="screen" width="640" height="320" tabindex="0" aria-label="ASCII game screen"
           style="image-rendering: pixelated; display: block;"></canvas>
+        <div id="event-banner" style="display:none;"></div>
         <div id="game-overlay"
           style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; justify-content: center; align-items: center;">
         </div>

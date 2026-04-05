@@ -205,7 +205,8 @@ class GameClient {
       'lobbyUpdate': () => this.handleLobbyUpdate(data),
       'gameStarted': () => this.handleGameStarted(data),
       'voice-signal': () => this.voiceManager?.handleSignal(data),
-      'targetAcquiredChanged': () => this.updateTargetAcquiredButton(data.active)
+      'targetAcquiredChanged': () => this.updateTargetAcquiredButton(data.active),
+      'serverEvent': () => this.handleServerEvent(data)
     };
 
     if (handlers[data.type]) {
@@ -274,6 +275,24 @@ class GameClient {
     btn.textContent = `TARGET ACQUIRED: ${active ? 'ON' : 'OFF'}`;
     btn.style.color = active ? '#ff4444' : '#7b8596';
     btn.style.borderColor = active ? '#ff4444' : '#444';
+  }
+
+  handleServerEvent(data) {
+    const banner = document.getElementById('event-banner');
+    if (!banner) return;
+
+    if (data.phase === 'warning') {
+      banner.className = 'warning';
+      banner.textContent = `⚠  ${data.name}  —  ${data.description}  ⚠`;
+      banner.style.display = 'block';
+      this.addChatMessage(`⚠ INCOMING: ${data.name} — ${data.description}`, true);
+    } else if (data.phase === 'active') {
+      banner.className = 'active';
+      banner.textContent = `▶  ${data.name} ACTIVE`;
+    } else if (data.phase === 'ended') {
+      banner.className = '';
+      banner.style.display = 'none';
+    }
   }
 
   /**
