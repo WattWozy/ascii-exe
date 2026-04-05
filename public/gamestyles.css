@@ -1,5 +1,5 @@
 :root {
-  background: #070707
+  background: #04020a
 }
 
 html,
@@ -12,8 +12,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #070707;
-  color: #ffffff;
+  background: #04020a;
+  color: #c8b8e8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -99,7 +99,7 @@ body {
 }
 
 .chat-message .player-name {
-  color: #4fc3ff;
+  color: #9966ff;
   font-weight: bold;
 }
 
@@ -126,8 +126,8 @@ body {
 }
 
 #chat-input:focus {
-  border-color: rgba(79, 195, 255, 0.5);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(150, 100, 255, 0.5);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 #chat-hint {
@@ -147,9 +147,9 @@ pre#screen {
   line-height: 1.25;
   white-space: pre;
   overflow: auto;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  color: #e8eef6;
+  box-shadow: 0 6px 32px rgba(80, 0, 180, 0.18), 0 2px 8px rgba(0,0,0,0.8);
+  border: 1px solid rgba(120, 80, 200, 0.12);
+  color: #c8b8e8;
 }
 
 /* per-tile inline cells so we can style individual symbols (pumps in blue, aliens in pink) */
@@ -163,32 +163,36 @@ pre#screen {
 }
 
 .pump {
-  color: #4fc3ff;
+  color: #00ddaa;
 }
 
 .player {
-  color: #7cd67c;
+  color: #d4c8ff;
   font-weight: bold;
 }
 
 .box,
-.box-filled,
+.box-filled {
+  color: #bb55ff;
+  font-weight: 700;
+}
+
 .box-empty {
-  color: #ea00ff;
+  color: #6622bb;
   font-weight: 700;
 }
 
 .map-bomb {
-  color: #ffeb3b;
+  color: #ff8833;
   font-weight: 700;
 }
 
 .droplet {
-  color: #7fe0ff;
+  color: #22aaff;
 }
 
 .gold {
-  color: #7cd67c;
+  color: #ffcc33;
   font-weight: bold;
   animation: blink 1s step-end infinite;
 }
@@ -199,32 +203,32 @@ pre#screen {
 }
 
 .flag-red {
-  color: #ff4444;
+  color: #ff3344;
   font-weight: bold;
 }
 
 .flag-blue {
-  color: #4444ff;
+  color: #3366ff;
   font-weight: bold;
 }
 
 .base-red {
-  color: #aa0000;
-  background: rgba(255, 0, 0, 0.1);
+  color: #ff3344;
+  background: rgba(200, 0, 30, 0.12);
 }
 
 .base-blue {
-  color: #0000aa;
-  background: rgba(0, 0, 255, 0.1);
+  color: #3366ff;
+  background: rgba(30, 60, 220, 0.12);
 }
 
 .hill {
-  color: #ffff00;
-  background: rgba(255, 255, 0, 0.1);
+  color: #aaff44;
+  background: rgba(120, 220, 30, 0.08);
 }
 
 .bomb-on {
-  color: #ff6666;
+  color: #ff4422;
   font-weight: bold;
 }
 
@@ -232,8 +236,12 @@ pre#screen {
   transition: color 0.1s linear;
 }
 
+.pushable {
+  color: #7a4e1a;
+}
+
 .dragging {
-  color: #ffaa00;
+  color: #ffcc00;
   animation: drag-pulse 0.5s ease-in-out infinite alternate;
 }
 
@@ -248,12 +256,12 @@ pre#screen {
 }
 
 .alien {
-  color: #ff66b2;
+  color: #ff2d78;
 }
 
 .invisible {
-  color: #070707;
-  background: #070707;
+  color: #04020a;
+  background: #04020a;
 }
 
 
@@ -338,7 +346,7 @@ pre#screen {
 
 .progress-bar-fill {
   height: 100%;
-  background: #4fc3ff;
+  background: #22aaff;
   transition: width 0.2s ease-out;
 }
 
@@ -363,21 +371,21 @@ pre#screen {
 }
 
 .overlay-content {
-  background: rgba(13, 17, 23, 0.95);
+  background: rgba(4, 2, 16, 0.97);
   padding: 32px;
-  border: 2px solid #4fc3ff;
+  border: 2px solid #7744cc;
   border-radius: 12px;
   text-align: center;
-  box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px rgba(79, 195, 255, 0.2);
+  box-shadow: 0 0 60px rgba(0,0,0,0.95), 0 0 24px rgba(120, 60, 220, 0.25);
   min-width: 400px;
 }
 
 .overlay-content h1 {
-  color: #4fc3ff;
+  color: #c8a8ff;
   margin: 0 0 24px 0;
   font-size: 32px;
   letter-spacing: 4px;
-  text-shadow: 0 0 10px rgba(79, 195, 255, 0.4);
+  text-shadow: 0 0 12px rgba(160, 100, 255, 0.5);
 }
 
 .lobby-info {
@@ -426,9 +434,9 @@ pre#screen {
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #4fc3ff;
-  color: #4fc3ff;
+  background: rgba(120, 60, 220, 0.15);
+  border-color: #9966ff;
+  color: #c8a8ff;
 }
 
 .blink {

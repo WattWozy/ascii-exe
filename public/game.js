@@ -20,10 +20,10 @@
       oxygenTextEl,
       mapOpts = {},
       // Tile constants (defaults if not provided globally)
-      TILE_WALL = (window.TILES && window.TILES.WALL) || '#',
+      TILE_WALL = (window.TILES && window.TILES.WALL) || '▓',
       TILE_FLOOR = (window.TILES && window.TILES.FLOOR) || '.',
       TILE_PLAYER = (window.TILES && window.TILES.PLAYER) || '@',
-      TILE_PUSH = (window.TILES && window.TILES.PUSHABLE) || 'o',
+      TILE_PUSH = (window.TILES && window.TILES.PUSHABLE) || '▒',
       TILE_PUMP = (window.TILES && window.TILES.PUMP) || '*',
       TILE_DROPLET = (window.TILES && window.TILES.DROPLET) || '+',
       TILE_GOLD = (window.TILES && window.TILES.GOLD) || '€',
@@ -78,29 +78,30 @@
     let previousFrame = null; // For dirty-diff optimization
     let renderScheduled = false;
 
-    // Color mapping for canvas renderer
+    // Color mapping for canvas renderer — deep-space mysterious palette
     const COLOR_MAP = {
-      wall: '#e8eef6',
-      floor: '#070707',
-      player: '#7cd67c',
-      alien: '#ff66b2',
-      pump: '#4fc3ff',
-      box: '#ea00ff',
-      box_filled: '#ea00ff',
-      box_empty: '#ea00ff',
-      map_bomb: '#ffeb3b',
-      droplet: '#7fe0ff',
-      gold: '#7cd67c',
+      wall: '#3a2a5a',
+      pushable: '#7a4e1a',
+      floor: '#04020a',
+      player: '#d4c8ff',
+      alien: '#ff2d78',
+      pump: '#00ddaa',
+      box: '#bb55ff',
+      box_filled: '#bb55ff',
+      box_empty: '#6622bb',
+      map_bomb: '#ff8833',
+      droplet: '#22aaff',
+      gold: '#ffcc33',
       bank: '#ffd700',
-      flag_red: '#ff4444',
-      flag_blue: '#4444ff',
-      base_red: '#aa0000',
-      base_blue: '#0000aa',
-      hill: '#ffff00',
-      bomb_on: '#ff6666',
-      bomb_off: '#ffeb3b',
-      dragging: '#ffaa00',
-      invisible: '#070707'
+      flag_red: '#ff3344',
+      flag_blue: '#3366ff',
+      base_red: '#660011',
+      base_blue: '#001166',
+      hill: '#aaff44',
+      bomb_on: '#ff4422',
+      bomb_off: '#ff9944',
+      dragging: '#ffcc00',
+      invisible: '#04020a'
     };
 
     if (useCanvas) {
@@ -128,7 +129,7 @@
       canvasCtx.textBaseline = 'middle';
 
       // Fill initial background
-      canvasCtx.fillStyle = COLOR_MAP.floor;
+      canvasCtx.fillStyle = '#04020a';
       canvasCtx.fillRect(0, 0, canvasWidth, canvasHeight);
 
       console.log('[Canvas Renderer] Enabled - GPU acceleration active');
@@ -273,8 +274,9 @@
         else if (ch === TILE_WALL) color = COLOR_MAP.wall;
         else if (ch === TILE_PUSH) {
           color = (draggedWall && draggedWall.x === x && draggedWall.y === y)
-            ? COLOR_MAP.dragging : COLOR_MAP.wall;
+            ? COLOR_MAP.dragging : COLOR_MAP.pushable;
           if (draggedWall && draggedWall.x === x && draggedWall.y === y) classes.push('dragging');
+          else classes.push('pushable');
         }
         else if (ch === TILE_PUMP) { color = COLOR_MAP.pump; classes.push('pump'); }
         else if (ch === (mapOpts.boxSymbol || window.TILES?.BOX || 'Ø')) {
@@ -343,10 +345,22 @@
             // Clear tile area
             const tx = x * TILE_SIZE;
             const ty = y * TILE_SIZE;
-            canvasCtx.fillStyle = COLOR_MAP.floor;
-            canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
 
-            // Draw character if not empty
+            // Wall tiles get a filled background for a solid, chunky look
+            const isWall = curr.char === TILE_WALL;
+            const isPushable = curr.char === TILE_PUSH;
+            if (isWall) {
+              canvasCtx.fillStyle = '#1a0e2e';
+              canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+            } else if (isPushable) {
+              canvasCtx.fillStyle = '#1a0e04';
+              canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+            } else {
+              canvasCtx.fillStyle = COLOR_MAP.floor;
+              canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+            }
+
+            // Draw character if not empty/space
             if (curr.char && curr.char !== ' ') {
               canvasCtx.fillStyle = curr.color;
               canvasCtx.fillText(curr.char, tx + TILE_SIZE / 2, ty + TILE_SIZE / 2);
@@ -461,6 +475,7 @@
         if (ch === TILE_FLOOR) ch = ' ';
         else if (ch === TILE_PUSH) {
           if (draggedWall && draggedWall.x === x && draggedWall.y === y) classes.push('dragging');
+          else classes.push('pushable');
         }
         else if (ch === TILE_PUMP) classes.push('pump');
         else if (ch === (mapOpts.boxSymbol || window.TILES?.BOX || 'Ø')) {
@@ -501,7 +516,7 @@
       if (oxygenBarEl) {
         const pct = Math.max(0, Math.min(100, (playerState.oxygen / maxOxygen) * 100));
         oxygenBarEl.style.width = `${pct}%`;
-        oxygenBarEl.style.backgroundColor = pct < 25 ? '#ff6666' : pct < 50 ? '#ffeb3b' : '#4fc3ff';
+        oxygenBarEl.style.backgroundColor = pct < 25 ? '#ff4422' : pct < 50 ? '#ff9944' : '#22aaff';
       }
       if (oxygenTextEl) oxygenTextEl.textContent = `${playerState.oxygen}/${maxOxygen}`;
 

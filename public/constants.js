@@ -1,20 +1,20 @@
 (function (exports) {
     const TILES = {
-        WALL: '#',
+        WALL: '▓',
         FLOOR: '.',
         PLAYER: '@',
-        PUSHABLE: 'o',
-        PUMP: '*',
-        DROPLET: '+',
-        BOX: 'Ø',
-        BOMB: 'B',
-        GOLD: '€',
+        PUSHABLE: '▒',
+        PUMP: '◉',
+        DROPLET: '·',
+        BOX: '▣',
+        BOMB: '◈',
+        GOLD: '◆',
         BANK: '$',
-        FLAG_RED: 'P',
-        FLAG_BLUE: 'p',
-        BASE_RED: '[',
-        BASE_BLUE: ']',
-        HILL: 'H'
+        FLAG_RED: '⚑',
+        FLAG_BLUE: '⚐',
+        BASE_RED: '◧',
+        BASE_BLUE: '◨',
+        HILL: '▲'
     };
 
     const ITEM_INFO = {
