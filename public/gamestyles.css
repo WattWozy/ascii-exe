@@ -447,3 +447,40 @@ pre#screen {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
+
+/* ── Server Event Banner ── */
+#event-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10;
+  text-align: center;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 3px;
+  font-weight: bold;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+#event-banner.warning {
+  display: block !important;
+  background: rgba(160, 10, 10, 0.92);
+  color: #ffcccc;
+  border: 1px solid #ff3333;
+  animation: alarm-pulse 0.4s step-end infinite;
+}
+
+#event-banner.active {
+  display: block !important;
+  background: rgba(100, 5, 5, 0.85);
+  color: #ff8888;
+  border: 1px solid #882222;
+}
+
+@keyframes alarm-pulse {
+  0%, 100% { background: rgba(160, 10, 10, 0.92); color: #ffcccc; }
+  50%       { background: rgba(40,  2,  2, 0.95); color: #ff5555; }
+}

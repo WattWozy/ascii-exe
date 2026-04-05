@@ -492,6 +492,215 @@ class KingOfTheHillMode extends GameModeHandler {
   }
 }
 
+// ─── Server Event System ──────────────────────────────────────────────────────
+
+const SERVER_EVENTS = [
+  {
+    id: 'ALIEN_SURGE',
+    name: 'ALIEN SURGE',
+    description: 'A wave of aliens floods the sector!',
+    type: 'destructive',
+    duration: 20000,
+    canActivate: (room) => room.settings.enableAliens,
+    execute(room) {
+      const before = room.aliens.length;
+      room._spawnAliens(3);
+      this._surgeCount = room.aliens.length - before;
+    },
+    cleanup(room) {
+      if (this._surgeCount > 0) {
+        room.aliens.splice(room.aliens.length - this._surgeCount, this._surgeCount);
+        this._surgeCount = 0;
+      }
+    }
+  },
+  {
+    id: 'O2_DRAIN',
+    name: 'OXYGEN BLEED',
+    description: 'Emergency: oxygen reserves compromised!',
+    type: 'destructive',
+    duration: 0,
+    canActivate: (room) => room.settings.oxygenDepletion,
+    execute(room) {
+      room.players.forEach(player => {
+        if (!player.isDead) {
+          player.oxygen = Math.max(0, player.oxygen - Math.floor(player.maxOxygen * 0.3));
+        }
+      });
+    },
+    cleanup() {}
+  },
+  {
+    id: 'METEOR_SHOWER',
+    name: 'METEOR SHOWER',
+    description: 'Debris is reshaping the terrain!',
+    type: 'destructive',
+    duration: 15000,
+    canActivate: () => true,
+    execute(room) {
+      this._changedTiles = [];
+      const playerOccupied = new Set();
+      room.players.forEach(p => playerOccupied.add(`${p.x},${p.y}`));
+      const floorTiles = [];
+      for (let y = 1; y < room.height - 1; y++) {
+        for (let x = 1; x < room.width - 1; x++) {
+          if (room.map[y][x] === TILES.FLOOR && !playerOccupied.has(`${x},${y}`)) {
+            floorTiles.push({ x, y });
+          }
+        }
+      }
+      const count = Math.min(8, Math.floor(floorTiles.length * 0.05));
+      for (let i = 0; i < count; i++) {
+        const idx = Math.floor(Math.random() * floorTiles.length);
+        const { x, y } = floorTiles.splice(idx, 1)[0];
+        room.map[y][x] = TILES.WALL;
+        this._changedTiles.push({ x, y });
+      }
+      if (this._changedTiles.length > 0) {
+        room.broadcastMapChange(this._changedTiles.map(t => ({ x: t.x, y: t.y, tile: TILES.WALL })));
+      }
+    },
+    cleanup(room) {
+      if (this._changedTiles && this._changedTiles.length > 0) {
+        this._changedTiles.forEach(({ x, y }) => { room.map[y][x] = TILES.FLOOR; });
+        room.broadcastMapChange(this._changedTiles.map(t => ({ x: t.x, y: t.y, tile: TILES.FLOOR })));
+        this._changedTiles = [];
+      }
+    }
+  },
+  {
+    id: 'OXYGEN_BONUS',
+    name: 'OXYGEN CACHE',
+    description: 'Emergency oxygen reserves deployed!',
+    type: 'creational',
+    duration: 0,
+    canActivate: (room) => room.settings.oxygenDepletion,
+    execute(room) {
+      const changes = [];
+      let placed = 0;
+      for (let attempts = 0; attempts < 100 && placed < 5; attempts++) {
+        const x = 1 + Math.floor(Math.random() * (room.width - 2));
+        const y = 1 + Math.floor(Math.random() * (room.height - 2));
+        if (room.map[y][x] === TILES.FLOOR) {
+          room.map[y][x] = TILES.DROPLET;
+          changes.push({ x, y, tile: TILES.DROPLET });
+          placed++;
+        }
+      }
+      if (changes.length > 0) room.broadcastMapChange(changes);
+    },
+    cleanup() {}
+  },
+  {
+    id: 'SPEED_BOOST',
+    name: 'WARP FIELD',
+    description: 'Aliens are moving at hyperspeed!',
+    type: 'modificative',
+    duration: 15000,
+    canActivate: (room) => room.settings.enableAliens && room.aliens.length > 0,
+    execute(room) {
+      this._prevTickMs = room.alienBaseTickMs;
+      room.alienBaseTickMs = Math.floor(room.alienBaseTickMs / 2);
+      room._restartAlienTimer();
+    },
+    cleanup(room) {
+      room.alienBaseTickMs = this._prevTickMs;
+      room._restartAlienTimer();
+    }
+  },
+  {
+    id: 'LIGHTS_OUT',
+    name: 'LIGHTS OUT',
+    description: 'Visibility systems offline!',
+    type: 'modificative',
+    duration: 12000,
+    canActivate: (room) => !room.settings.darkRoom,
+    execute(room) {
+      room.settings.darkRoom = true;
+    },
+    cleanup(room) {
+      room.settings.darkRoom = false;
+    }
+  }
+];
+
+class ServerEventSystem {
+  constructor(room) {
+    this.room = room;
+    this._timer = null;
+    this._cleanupTimer = null;
+    this._active = null;
+  }
+
+  start() {
+    this._scheduleNext();
+  }
+
+  stop() {
+    if (this._timer) { clearTimeout(this._timer); this._timer = null; }
+    if (this._cleanupTimer) { clearTimeout(this._cleanupTimer); this._cleanupTimer = null; }
+    if (this._active) {
+      try { this._active.cleanup(this.room); } catch (e) { /* ignore cleanup errors on stop */ }
+      this._active = null;
+    }
+  }
+
+  _scheduleNext() {
+    const delay = 20000 + Math.random() * 20000; // 20–40s
+    this._timer = setTimeout(() => this._triggerRandom(), delay);
+  }
+
+  _triggerRandom() {
+    if (this.room.state.phase !== PHASES.PLAYING) {
+      this._scheduleNext();
+      return;
+    }
+
+    const eligible = SERVER_EVENTS.filter(e => e.canActivate(this.room));
+    if (eligible.length === 0) { this._scheduleNext(); return; }
+
+    // Clone so per-execution state (_changedTiles etc.) doesn't persist across firings
+    const template = eligible[Math.floor(Math.random() * eligible.length)];
+    const event = Object.assign({}, template);
+
+    // Phase 1: Warning (3s)
+    this.room.broadcast({ type: 'serverEvent', phase: 'warning', id: event.id, name: event.name, description: event.description });
+
+    setTimeout(() => {
+      if (this.room.state.phase !== PHASES.PLAYING) {
+        this.room.broadcast({ type: 'serverEvent', phase: 'ended', id: event.id });
+        this._scheduleNext();
+        return;
+      }
+
+      // Phase 2: Active
+      this.room.broadcast({ type: 'serverEvent', phase: 'active', id: event.id, name: event.name, description: event.description });
+      this._active = event;
+      try { event.execute(this.room); } catch (e) { console.error(`[ServerEvent] execute ${event.id}:`, e); }
+
+      const endEvent = () => {
+        try { event.cleanup(this.room); } catch (e) { console.error(`[ServerEvent] cleanup ${event.id}:`, e); }
+        this._active = null;
+        this.room.broadcast({ type: 'serverEvent', phase: 'ended', id: event.id });
+        this._scheduleNext();
+      };
+
+      if (event.duration > 0) {
+        this._cleanupTimer = setTimeout(endEvent, event.duration);
+      } else {
+        // Instant events: show active banner briefly then end
+        this._active = null;
+        this._cleanupTimer = setTimeout(() => {
+          this.room.broadcast({ type: 'serverEvent', phase: 'ended', id: event.id });
+          this._scheduleNext();
+        }, 2000);
+      }
+    }, 3000);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class GameRoom {
   constructor(roomId, settings = {}) {
     this.roomId = roomId;
@@ -570,6 +779,9 @@ class GameRoom {
 
     // Start the game loop for this room
     this._startGameLoop();
+
+    // Server event system (starts when game begins, not in lobby)
+    this.eventSystem = new ServerEventSystem(this);
 
     // Host management
     this.hostId = null;
@@ -1251,6 +1463,7 @@ class GameRoom {
   _stopGameLoop() {
     if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
     if (this.alienTimer) clearInterval(this.alienTimer);
+    if (this.eventSystem) this.eventSystem.stop();
   }
 
   /**
@@ -1386,6 +1599,8 @@ class GameRoom {
       message: 'Game Started!',
       timestamp: Date.now()
     });
+
+    this.eventSystem.start();
   }
 }
 
