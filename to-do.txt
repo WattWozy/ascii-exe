@@ -1,0 +1,40 @@
+[?] lock-the-room functionality. 
+[ ] voice-chat functionality.
+[X] predefined maps? rob the bank for example? 
+[ ] semi-defined maps: hardcoded to a limit, randomized to another.
+[X] important: lock on stuff to drag
+[ ] important: race conditions on knife attacks.
+[X] lobby for starting the game.
+->
+
+[ ] alien-ai: in enclose mode: aliens must know how to target people.
+    -> can aliens also destroy stuff?
+
+  Highest bang-for-buck picks that fit your existing architecture:
+  1. [X] Target-Acquired mode — server-side A* on the alien tick, just swap the movement logic  
+  2. Sound effects — pure client-side, zero server changes
+  3. Random events — server broadcasts an event message every N ticks, clients react        
+  4. Knife — already scoped in your to-do, fits the existing input→server→validate pattern
+
+TECHNICAL CONSIDERATIONS: 
+1. Packing Efficiency
+ - If rooms are very lightweight, you can run many rooms per VM.
+ - Use something like a container or process-per-room, or even a single Node process that handles multiple rooms (depending on game design).
+ - Better packing = lower cost.
+
+2. Autoscaling / Dynamic Provisioning
+ - You’ll likely want autoscaling: spin up new instances (VMs or containers) when room count goes up, shut them down when demand drops.
+ - Use managed container platforms / orchestration (Kubernetes, or serverless-container) to make that easier.
+ - Or use spot / preemptible instances to save cost if you allow interruptions.
+
+3. Network Cost
+ - With multiplayer, bandwidth might be non-trivial. Data egress (outbound) is often a big cost on cloud providers.
+ - Optimize how much data per tick / message you send.
+
+4. Game Loop / Tick Rate
+ - If your rooms run a game loop (tick loop), that costs CPU constantly — so “scale to zero” is less likely unless rooms are destroyed.
+ - If rooms are ephemeral, you can shut them down when empty; if persistent, you need “always-on” compute.
+
+5. State Persistence
+ - Do you need a database? Or is state purely in memory and not persisted for long?
+ - If you need persistent storage (leaderboards, player data), that’s another cost.

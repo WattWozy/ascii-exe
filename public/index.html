@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCIINAUT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <pre class="ascii-art">
+
+
+    _    ___  ___  ___  ___  _  _    _    _   _  _____ 
+   /_\  / __|/ __||_ _||_ _|| \| |  /_\  | | | ||_   _|
+  / _ \ \__ \ (__  | |  | | | .` | / _ \ | |_| |  | |  
+ /_/ \_\|___/\___||___||___||_|\_|/_/ \_\ \___/   |_|  
+        </pre>
+
+        <div class="menu">
+            <div class="settings-container">
+                <div class="setting-group">
+                    <label for="enemyCount">ENEMIES</label>
+                    <input type="number" id="enemyCount" value="3" min="0" max="20" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="dropletCount">OXYGEN</label>
+                    <input type="number" id="dropletCount" value="5" min="0" max="50" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="boxCount">BOXES</label>
+                    <input type="number" id="boxCount" value="5" min="0" max="50" class="setting-input">
+                </div>
+                <div class="setting-group">
+                    <label for="enableAliens">ALIENS</label>
+                    <input type="checkbox" id="enableAliens" class="setting-checkbox" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="oxygenDepletion">O2 DEPLETE</label>
+                    <input type="checkbox" id="oxygenDepletion" class="setting-checkbox" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="darkRoom">DARK</label>
+                    <input type="checkbox" id="darkRoom" class="setting-checkbox">
+                </div>
+            </div>
+
+            <div class="mode-selection"
+                style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
+                <div style="color: var(--dim-color); font-size: 12px; letter-spacing: 2px; margin-bottom: 5px;">SELECT
+                    GAME MODE</div>
+                <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
+                <button class="btn" onclick="startNewGame('ROB_BANK')">> ROB THE BANK</button>
+                <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
+                <button class="btn" onclick="startNewGame('KING_HILL')">> KING OF THE HILL</button>
+            </div>
+
+            <div class="join-section">
+                <button class="btn" style="min-width: auto;" onclick="joinGame()">Join Room</button>
+                <input type="text" id="roomInput" placeholder="Enter Room ID" onkeypress="handleEnter(event)">
+            </div>
+        </div>
+
+        <div class="footer">
+            [ SYSTEM READY ]<span class="blink">_</span>
+        </div>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="gamestate.js"></script>
+    <script src="mapgen.js"></script>
+
+    <script src="game.js"></script>
+    <script src="client.js"></script>
+    <script>
+        // Check if we have a room param, if so redirect immediately to game.html
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('room')) {
+            window.location.href = 'game.html' + window.location.search;
+        }
+
+        function startNewGame(mode) {
+            const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
+            const enemies = document.getElementById('enemyCount').value;
+            const droplets = document.getElementById('dropletCount').value;
+            const boxes = document.getElementById('boxCount').value;
+            const darkRoom = document.getElementById('darkRoom').checked;
+            const enableAliens = document.getElementById('enableAliens').checked;
+            const oxygenDepletion = document.getElementById('oxygenDepletion').checked;
+
+            // Store settings in session storage to keep URL clean
+            const settings = {
+                enemyCount: parseInt(enemies),
+                dropletCount: parseInt(droplets),
+                boxCount: parseInt(boxes),
+                darkRoom: darkRoom,
+                enableAliens: enableAliens,
+                oxygenDepletion: oxygenDepletion,
+                gameMode: mode || 'SURVIVAL'
+            };
+            sessionStorage.setItem('roomSettings', JSON.stringify(settings));
+
+            window.location.href = `game.html?room=${randomId}`;
+        }
+
+        // Handle ENCLOSE button state based on aliens checkbox
+        const aliensCheckbox = document.getElementById('enableAliens');
+        const encloseButton = document.getElementById('btn-enclose');
+
+        function updateEncloseButton() {
+            if (!aliensCheckbox.checked) {
+                encloseButton.disabled = true;
+                encloseButton.style.opacity = '0.3';
+                encloseButton.style.cursor = 'not-allowed';
+                encloseButton.title = 'ENCLOSE requires aliens to be enabled';
+            } else {
+                encloseButton.disabled = false;
+                encloseButton.style.opacity = '1';
+                encloseButton.style.cursor = 'pointer';
+                encloseButton.title = '';
+            }
+        }
+
+        aliensCheckbox.addEventListener('change', updateEncloseButton);
+        updateEncloseButton(); // Initial state
+
+        function joinGame() {
+            const room = document.getElementById('roomInput').value.trim();
+            if (room) {
+                window.location.href = `game.html?room=${encodeURIComponent(room)}`;
+            } else {
+                const input = document.getElementById('roomInput');
+                input.style.borderColor = '#ff6666';
+                setTimeout(() => input.style.borderColor = '', 500);
+            }
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') {
+                joinGame();
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,29 +1,30 @@
 // Map generator for ASCII Miner
 
-
-
-
-
-
-
 // Exposes `window.generateMap(size = 20, opts = {})` which returns a 2D array of characters.
 // opts:
 //  - pushableProb: probability of an 'o' tile on inner cells (default 0.06)
 //  - holeMidpoints: whether to leave midpoints in borders as '.' (default true)
 //  - seed: optional number for deterministic pseudo-random (not implemented yet)
 
-(function() {
+(function () {
+  let TILES;
+  if (typeof module !== 'undefined' && module.exports) {
+    TILES = require('./constants.js').TILES;
+  } else {
+    TILES = window.TILES;
+  }
+
   function defaultOptions() {
     return {
       pushableProb: 0.06,
       wallProb: 0.08,
       boxCount: 5,
-      boxSymbol: 'Ø',
+      boxSymbol: TILES.BOX,
       bombCount: 5,
-      bombSymbol: 'B',
-      pumpCount: 5,
-      pumpSymbol: '⛽',
-      pumpValue: 25,
+      bombSymbol: TILES.BOMB,
+
+      dropletCount: 5,
+      dropletSymbol: TILES.DROPLET,
       holeMidpoints: true
     };
   }
@@ -48,36 +49,36 @@
             (x === 0 && y === midY) ||
             (x === cols - 1 && y === midY)
           );
-          row += hole ? '.' : '#';
+          row += hole ? TILES.FLOOR : TILES.WALL;
         } else {
           // inner cell: can be wall '#', pushable 'o', or floor '.'
           const r = rand();
           if (r < opts.wallProb) {
-            row += '#';
+            row += TILES.WALL;
           } else if (r < opts.wallProb + opts.pushableProb) {
             // avoid creating >2 consecutive 'o' horizontally
-            const prev1 = row[row.length - 1] === 'o';
-            const prev2 = row[row.length - 2] === 'o';
-            row += (prev1 && prev2) ? '.' : 'o';
+            const prev1 = row[row.length - 1] === TILES.PUSHABLE;
+            const prev2 = row[row.length - 2] === TILES.PUSHABLE;
+            row += (prev1 && prev2) ? TILES.FLOOR : TILES.PUSHABLE;
           } else {
-            row += '.';
+            row += TILES.FLOOR;
           }
         }
       }
       newMap.push(row.split(''));
     }
 
-    // place oxygen pumps on floor tiles ('.')
-    if (opts.pumpCount && opts.pumpSymbol) {
+    // place oxygen droplets on floor tiles ('.')
+    if (opts.dropletCount && opts.dropletSymbol) {
       let placed = 0;
       const maxAttempts = cols * rows * 5;
       let attempts = 0;
-      while (placed < opts.pumpCount && attempts < maxAttempts) {
+      while (placed < opts.dropletCount && attempts < maxAttempts) {
         attempts++;
         const px = Math.floor(rand() * (cols - 2)) + 1; // avoid border
         const py = Math.floor(rand() * (rows - 2)) + 1;
-        if (newMap[py][px] === '.') {
-          newMap[py][px] = opts.pumpSymbol;
+        if (newMap[py][px] === TILES.FLOOR) {
+          newMap[py][px] = opts.dropletSymbol;
           placed++;
         }
       }
@@ -92,7 +93,7 @@
         attempts++;
         const bx = Math.floor(rand() * (cols - 2)) + 1;
         const by = Math.floor(rand() * (rows - 2)) + 1;
-        if (newMap[by][bx] === '.') {
+        if (newMap[by][bx] === TILES.FLOOR) {
           newMap[by][bx] = opts.bombSymbol;
           placed++;
         }
@@ -108,7 +109,7 @@
         attempts++;
         const bx = Math.floor(rand() * (cols - 2)) + 1;
         const by = Math.floor(rand() * (rows - 2)) + 1;
-        if (newMap[by][bx] === '.') {
+        if (newMap[by][bx] === TILES.FLOOR) {
           newMap[by][bx] = opts.boxSymbol;
           placed++;
         }
