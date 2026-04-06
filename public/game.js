@@ -67,6 +67,7 @@
     let currentPhase = 'LOBBY';
     let winner = null;
     let raceRankings = null;
+    let globalRank = null;
     let started = false;
 
     // Dark-room mode
@@ -573,10 +574,14 @@
             <td style="padding:4px 0; color:#aaffaa">${timeStr}</td>
           </tr>`;
         }).join('');
+        const globalRankLine = globalRank
+          ? `<p style="color:#4fc3ff; margin:0 0 20px 0; font-size:12px; letter-spacing:1px;">YOUR GLOBAL RANK: <strong>#${globalRank}</strong></p>`
+          : '';
         el.innerHTML = `
           <div style="background: rgba(13,17,23,0.97); padding: 32px; border: 2px solid #ffee44; border-radius: 12px; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px #ffee4440; min-width: 320px; backdrop-filter: blur(4px); pointer-events: auto;">
             <h1 style="color:#ffee44; margin:0 0 4px 0; font-size:28px; letter-spacing:2px;">RACE COMPLETE</h1>
-            <p style="color:#aab3c2; margin:0 0 20px 0; font-size:12px; text-transform:uppercase; letter-spacing:1px;">Winner: ${winner}</p>
+            <p style="color:#aab3c2; margin:0 0 12px 0; font-size:12px; text-transform:uppercase; letter-spacing:1px;">Winner: ${winner}</p>
+            ${globalRankLine}
             <table style="margin:0 auto 24px; border-collapse:collapse; font-size:14px; text-align:left;">${rows}</table>
             ${homeBtn}
           </div>`;
@@ -853,7 +858,8 @@
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
       updateDragState, updateGamePhase, updateDarkRoomMode,
-      setGravityInverted(val) { gravityInverted = val; }
+      setGravityInverted(val) { gravityInverted = val; },
+      setGlobalRank(rank) { globalRank = rank; render(); }
     };
   }
 

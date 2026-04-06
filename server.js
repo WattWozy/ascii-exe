@@ -644,6 +644,7 @@ class RaceMode extends GameModeHandler {
     this.rankings.push({
       playerId: player.id,
       name: player.displayName || getPlayerName(player.id),
+      email: player.displayEmail || null,
       count: this.playerProgress[player.id],
       finishTime: elapsed,
       rank: this.rankings.length + 1
@@ -722,18 +723,36 @@ class RaceMode extends GameModeHandler {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return;
     const { createClient } = require('@supabase/supabase-js');
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const winner = rankings.find(r => r.rank === 1);
     supabase.from('race_results').insert(
       rankings.map(r => ({
         room_id: this.room.roomId,
         player_id: r.playerId,
         player_name: r.name,
+        player_email: r.email,
         rank: r.rank,
         symbols_collected: r.count,
         finish_time_seconds: r.finishTime,
       }))
-    ).then(({ error }) => {
-      if (error) console.error('[Race] Supabase error:', error);
-      else console.log('[Race] Results saved to Supabase');
+    ).then(async ({ error }) => {
+      if (error) { console.error('[Race] Supabase error:', error); return; }
+      console.log('[Race] Results saved to Supabase');
+
+      // Fetch global rank for the winner and broadcast it
+      if (!winner || winner.finishTime == null) return;
+      const { data: countData, error: rankError } = await supabase
+        .from('race_results')
+        .select('finish_time_seconds', { count: 'exact', head: false })
+        .eq('rank', 1)
+        .not('finish_time_seconds', 'is', null)
+        .lt('finish_time_seconds', winner.finishTime);
+      if (rankError) { console.error('[Race] Rank query error:', rankError); return; }
+
+      const globalRank = (countData ? countData.length : 0) + 1;
+      const winnerPlayer = this.room.players.get(winner.playerId);
+      if (winnerPlayer && winnerPlayer.ws.readyState === 1) {
+        winnerPlayer.ws.send(JSON.stringify({ type: 'raceGlobalRank', rank: globalRank }));
+      }
     });
   }
 }
@@ -1894,10 +1913,13 @@ wss.on('connection', (ws, req) => {
         // Add player to room
         currentRoom.addPlayer(playerId, ws);
 
-        // Store custom display name if provided
+        // Store custom display name and email if provided
         const player = currentRoom.players.get(playerId);
         if (settings.playerName) {
           player.displayName = settings.playerName.trim().substring(0, 20) || null;
+        }
+        if (settings.playerEmail) {
+          player.displayEmail = settings.playerEmail.trim().substring(0, 100) || null;
         }
 
         // Send initialization data
@@ -2049,14 +2071,28 @@ app.get('/api/leaderboard', async (req, res) => {
   }
   const { createClient } = require('@supabase/supabase-js');
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  // Fetch rank=1 finishes ordered by time, then deduplicate by email server-side
   const { data, error } = await supabase
     .from('race_results')
-    .select('player_name, finish_time_seconds')
+    .select('player_name, player_email, finish_time_seconds')
     .eq('rank', 1)
+    .not('finish_time_seconds', 'is', null)
     .order('finish_time_seconds', { ascending: true })
-    .limit(10);
+    .limit(200);
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data || []);
+
+  // Keep only the best time per email
+  const seen = new Set();
+  const best = [];
+  for (const row of (data || [])) {
+    const key = row.player_email || row.player_name;
+    if (!seen.has(key)) {
+      seen.add(key);
+      best.push(row);
+      if (best.length >= 10) break;
+    }
+  }
+  res.json(best);
 });
 
 app.get('/api/rooms', (req, res) => {

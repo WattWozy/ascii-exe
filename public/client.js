@@ -213,7 +213,8 @@ class GameClient {
       'voice-signal': () => this.voiceManager?.handleSignal(data),
       'alienDied': () => this.audio?.playSound('alienDeath'),
       'targetAcquiredChanged': () => this.updateTargetAcquiredButton(data.active),
-      'serverEvent': () => this.handleServerEvent(data)
+      'serverEvent': () => this.handleServerEvent(data),
+      'raceGlobalRank': () => this.game?.setGlobalRank?.(data.rank)
     };
 
     if (handlers[data.type]) {

@@ -47,17 +47,25 @@
                 </div>
             </div>
 
-            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;">
-                <label for="playerName" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">YOUR
-                    NAME</label>
-                <input type="text" id="playerName" placeholder="enter name..." maxlength="20"
-                    style="width:200px;text-align:center;" oninput="localStorage.setItem('playerName', this.value)">
+            <div style="display:flex;gap:12px;justify-content:center;width:100%;flex-wrap:wrap;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <label for="playerName" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">YOUR
+                        NAME</label>
+                    <input type="text" id="playerName" placeholder="enter name..." maxlength="20"
+                        style="width:160px;text-align:center;" oninput="localStorage.setItem('playerName', this.value)">
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <label for="playerEmail" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">EMAIL
+                        (not shared)</label>
+                    <input type="email" id="playerEmail" placeholder="your@email.com"
+                        style="width:160px;text-align:center;"
+                        oninput="localStorage.setItem('playerEmail', this.value)">
+                </div>
             </div>
 
-            <div class="mode-selection"
-                style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center;">
-                <div style="color: var(--dim-color); font-size: 12px; letter-spacing: 2px; margin-bottom: 5px;">SELECT
-                    GAME MODE</div>
+            <div style="display:flex;flex-direction:column;gap:10px;width:100%;align-items:center;">
+                <div style="color:var(--dim-color);font-size:12px;letter-spacing:2px;margin-bottom:5px;">SELECT GAME
+                    MODE</div>
                 <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
                 <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
                 <button class="btn" onclick="startRace()">> SYMBOL RACE</button>
@@ -65,17 +73,10 @@
 
             <div id="leaderboard-section"
                 style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:8px;padding:15px;box-sizing:border-box;">
-                <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;margin-bottom:10px;">SYMBOL RACE —
+                <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;margin-bottom:12px;">SYMBOL RACE —
                     TOP TIMES</div>
                 <div id="leaderboard-list" style="font-size:13px;color:var(--dim-color);">loading...</div>
             </div>
-
-            <!--
-            <div class="join-section">
-                <button class="btn" style="min-width: auto;" onclick="joinGame()">Join Room</button>
-                <input type="text" id="roomInput" placeholder="Enter Room ID" onkeypress="handleEnter(event)">
-            </div>
-            -->
         </div>
 
         <div class="footer">
@@ -83,14 +84,7 @@
         </div>
     </div>
 
-    <script src="utils.js"></script>
-    <script src="gamestate.js"></script>
-    <script src="mapgen.js"></script>
-
-    <script src="game.js"></script>
-    <script src="client.js"></script>
     <script>
-        // Check if we have a room param, if so redirect immediately to game.html
         const params = new URLSearchParams(window.location.search);
         if (params.has('room')) {
             window.location.href = 'game.html' + window.location.search;
@@ -98,52 +92,31 @@
 
         function startNewGame(mode) {
             const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
-            const enemies = document.getElementById('enemyCount').value;
-            const droplets = document.getElementById('dropletCount').value;
-            const boxes = document.getElementById('boxCount').value;
-            const darkRoom = document.getElementById('darkRoom').checked;
-            const enableAliens = document.getElementById('enableAliens').checked;
-            const oxygenDepletion = document.getElementById('oxygenDepletion').checked;
-
-            // Store settings in session storage to keep URL clean
             const settings = {
-                enemyCount: parseInt(enemies),
-                dropletCount: parseInt(droplets),
-                boxCount: parseInt(boxes),
-                darkRoom: darkRoom,
-                enableAliens: enableAliens,
-                oxygenDepletion: oxygenDepletion,
+                enemyCount: parseInt(document.getElementById('enemyCount').value),
+                dropletCount: parseInt(document.getElementById('dropletCount').value),
+                boxCount: parseInt(document.getElementById('boxCount').value),
+                darkRoom: document.getElementById('darkRoom').checked,
+                enableAliens: document.getElementById('enableAliens').checked,
+                oxygenDepletion: document.getElementById('oxygenDepletion').checked,
                 gameMode: mode || 'SURVIVAL'
             };
             sessionStorage.setItem('roomSettings', JSON.stringify(settings));
-
             window.location.href = `game.html?room=${randomId}`;
         }
 
-        // Handle ENCLOSE button state based on aliens checkbox
-        const aliensCheckbox = document.getElementById('enableAliens');
-        const encloseButton = document.getElementById('btn-enclose');
-
-        function updateEncloseButton() {
-            if (!aliensCheckbox.checked) {
-                encloseButton.disabled = true;
-                encloseButton.style.opacity = '0.3';
-                encloseButton.style.cursor = 'not-allowed';
-                encloseButton.title = 'ENCLOSE requires aliens to be enabled';
-            } else {
-                encloseButton.disabled = false;
-                encloseButton.style.opacity = '1';
-                encloseButton.style.cursor = 'pointer';
-                encloseButton.title = '';
-            }
-        }
-
-        aliensCheckbox.addEventListener('change', updateEncloseButton);
-        updateEncloseButton(); // Initial state
-
         function startRace() {
+            const nameEl = document.getElementById('playerName');
+            const emailEl = document.getElementById('playerEmail');
+            const playerName = nameEl.value.trim();
+            const playerEmail = emailEl.value.trim();
+
+            let valid = true;
+            if (!playerName) { nameEl.style.borderColor = '#ff6666'; valid = false; } else { nameEl.style.borderColor = ''; }
+            if (!playerEmail || !playerEmail.includes('@')) { emailEl.style.borderColor = '#ff6666'; valid = false; } else { emailEl.style.borderColor = ''; }
+            if (!valid) return;
+
             const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
-            const playerName = document.getElementById('playerName').value.trim();
             const settings = {
                 enemyCount: 0,
                 dropletCount: 3,
@@ -152,14 +125,33 @@
                 enableAliens: false,
                 oxygenDepletion: false,
                 gameMode: 'RACE',
-                playerName: playerName || null
+                playerName,
+                playerEmail
             };
             sessionStorage.setItem('roomSettings', JSON.stringify(settings));
             window.location.href = `game.html?room=${randomId}`;
         }
 
+        const aliensCheckbox = document.getElementById('enableAliens');
+        const encloseButton = document.getElementById('btn-enclose');
+        function updateEncloseButton() {
+            const off = !aliensCheckbox.checked;
+            encloseButton.disabled = off;
+            encloseButton.style.opacity = off ? '0.3' : '1';
+            encloseButton.style.cursor = off ? 'not-allowed' : 'pointer';
+            encloseButton.title = off ? 'ENCLOSE requires aliens to be enabled' : '';
+        }
+        aliensCheckbox.addEventListener('change', updateEncloseButton);
+        updateEncloseButton();
+
+        const savedName = localStorage.getItem('playerName');
+        if (savedName) document.getElementById('playerName').value = savedName;
+        const savedEmail = localStorage.getItem('playerEmail');
+        if (savedEmail) document.getElementById('playerEmail').value = savedEmail;
+
         async function loadLeaderboard() {
             const list = document.getElementById('leaderboard-list');
+            const myEmail = localStorage.getItem('playerEmail') || '';
             try {
                 const res = await fetch('/api/leaderboard');
                 const data = await res.json();
@@ -167,41 +159,21 @@
                     list.textContent = 'no records yet';
                     return;
                 }
-                list.innerHTML = data.map((row, i) =>
-                    `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <span style="color:${i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : 'var(--dim-color)'}">
-                            ${i + 1}. ${row.player_name}
+                list.innerHTML = data.map((row, i) => {
+                    const isMe = myEmail && row.player_email === myEmail;
+                    const nameColor = i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : 'inherit';
+                    return `<div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.05);${isMe ? 'background:rgba(79,195,255,0.08);border-radius:4px;' : ''}">
+                        <span style="color:${nameColor}">
+                            ${i + 1}. ${row.player_name}${isMe ? ' <span style="color:#4fc3ff;font-size:10px;">YOU</span>' : ''}
                         </span>
-                        <span style="color:var(--accent-color)">${row.finish_time_seconds}s</span>
-                    </div>`
-                ).join('');
+                        <span style="color:var(--accent-color);margin-left:8px;">${row.finish_time_seconds}s</span>
+                    </div>`;
+                }).join('');
             } catch (e) {
                 list.textContent = 'unavailable';
             }
         }
-
-        // Restore saved name
-        const savedName = localStorage.getItem('playerName');
-        if (savedName) document.getElementById('playerName').value = savedName;
-
         loadLeaderboard();
-
-        function joinGame() {
-            const room = document.getElementById('roomInput').value.trim();
-            if (room) {
-                window.location.href = `game.html?room=${encodeURIComponent(room)}`;
-            } else {
-                const input = document.getElementById('roomInput');
-                input.style.borderColor = '#ff6666';
-                setTimeout(() => input.style.borderColor = '', 500);
-            }
-        }
-
-        function handleEnter(e) {
-            if (e.key === 'Enter') {
-                joinGame();
-            }
-        }
     </script>
 </body>
 
