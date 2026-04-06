@@ -162,7 +162,8 @@ class GameClient {
    * Output: None
    */
   connect() {
-    this.ws = new WebSocket(`ws://${window.location.host}`);
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
 
     this.ws.onopen = () => console.log('Connected to game server');
     this.ws.onmessage = (event) => this.handleMessage(JSON.parse(event.data));

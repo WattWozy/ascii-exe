@@ -4,10 +4,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
-               connect-src 'self' ws://localhost:* ws://*:3000; 
-               script-src 'self' 'unsafe-inline'; 
-               style-src 'self' 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self';
+               connect-src 'self' ws://localhost:* ws://*:3000 ws://www.artemis2.earth wss://www.artemis2.earth;
+               script-src 'self' 'unsafe-inline';
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+               font-src 'self' https://fonts.gstatic.com;">
   <title>ARTEMIS II</title>
   <link rel="stylesheet" href="gamestyles.css">
 </head>
