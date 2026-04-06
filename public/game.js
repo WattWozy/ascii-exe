@@ -695,10 +695,11 @@
     function updateBombs(serverBombs) {
       const serverBombPositions = new Set(serverBombs.map(b => `${b.x},${b.y}`));
 
-      // Remove stale bombs
+      // Remove stale bombs (they exploded)
       for (let i = bombs.length - 1; i >= 0; i--) {
         if (!serverBombPositions.has(`${bombs[i].x},${bombs[i].y}`)) {
           bombs.splice(i, 1);
+          window.gameClient?.audio?.playSound('bombExplosion');
         }
       }
 

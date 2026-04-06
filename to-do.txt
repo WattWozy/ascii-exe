@@ -18,9 +18,9 @@ mechanix:
   -> ticker indicator.
 
 gamix: 
-  -> somehow indicate next "scene": sunrise, noon, sunset, night. 
-  -> somehow drop useful items
-  -> somehow attack
+  -> collectables and usables!
+  -> somehow attack with the usables. 
+  -> maps (pseudorandoms)
 
   
 

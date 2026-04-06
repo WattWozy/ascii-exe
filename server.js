@@ -1117,16 +1117,6 @@ class GameRoom {
           const idx = this.bombs.indexOf(bomb);
           if (idx !== -1) this.bombs.splice(idx, 1);
 
-          // Check for aliens in the explosion
-          for (let i = this.aliens.length - 1; i >= 0; i--) {
-            const alien = this.aliens[i];
-            // Simple collision: exact tile match
-            if (alien.x === bomb.x && alien.y === bomb.y) {
-              this.aliens.splice(i, 1);
-              console.log(`Alien killed at ${alien.x},${alien.y}`);
-            }
-          }
-
           this.broadcastMapChange([{ x: bomb.x, y: bomb.y, tile: TILES.FLOOR }]);
         }, bomb.delay);
       } else {
@@ -1387,6 +1377,7 @@ class GameRoom {
           }
         }
         if (candidates.length === 0) {
+          this.broadcast({ type: 'alienDied', x: a.x, y: a.y });
           this.aliens.splice(i, 1);
           continue;
         }
@@ -1549,6 +1540,7 @@ class GameRoom {
             jumps: player.jumps,
             dash: player.dash,
             isDead: player.isDead,
+            gold: player.gold || 0,
             modeStatus: this._getModeStatus(player)
           },
           timestamp: Date.now()

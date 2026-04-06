@@ -35,6 +35,10 @@ class GameClient {
 
     // Voice Chat
     this.voiceManager = window.VoiceManager ? new window.VoiceManager(this) : null;
+
+    // Audio
+    this.audio = window.AudioManager ? new window.AudioManager() : null;
+    this._prevInventory = { gold: 0, oxygen: 0 };
   }
 
   /**
@@ -197,7 +201,7 @@ class GameClient {
       'init': () => this.handleInit(data),
       'stateUpdate': () => this.handleStateUpdate(data),
       'playerDied': () => this.handlePlayerDied(data),
-      'gameOver': () => this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true),
+      'gameOver': () => this.handleGameOver(data),
       'mapChange': () => this.game?.applyMapChanges?.(data.changes),
       'bombUpdate': () => this.game?.updateBomb?.(data.bomb),
       'playerJoined': () => this.handlePlayerJoined(data),
@@ -206,6 +210,7 @@ class GameClient {
       'lobbyUpdate': () => this.handleLobbyUpdate(data),
       'gameStarted': () => this.handleGameStarted(data),
       'voice-signal': () => this.voiceManager?.handleSignal(data),
+      'alienDied': () => this.audio?.playSound('alienDeath'),
       'targetAcquiredChanged': () => this.updateTargetAcquiredButton(data.active),
       'serverEvent': () => this.handleServerEvent(data)
     };
@@ -257,6 +262,8 @@ class GameClient {
     const lobbyOverlay = document.getElementById('lobby-overlay');
     if (lobbyOverlay) lobbyOverlay.style.display = 'none';
 
+    this.audio?.announce('gameStarted', 'Game started!');
+
     if (this.game) {
       this.game.updateGamePhase?.(data.phase);
     }
@@ -276,6 +283,7 @@ class GameClient {
     btn.textContent = `TARGET ACQUIRED: ${active ? 'ON' : 'OFF'}`;
     btn.style.color = active ? '#ff4444' : '#7b8596';
     btn.style.borderColor = active ? '#ff4444' : '#444';
+    if (active) this.audio?.playSound('alienGrowl');
   }
 
   handleServerEvent(data) {
@@ -287,9 +295,11 @@ class GameClient {
       banner.textContent = `⚠  ${data.name}  —  ${data.description}  ⚠`;
       banner.style.display = 'block';
       this.addChatMessage(`⚠ INCOMING: ${data.name} — ${data.description}`, true);
+      this.audio?.announce('serverWarning', `Warning: ${data.name}. ${data.description}`);
     } else if (data.phase === 'active') {
       banner.className = 'active';
       banner.textContent = `▶  ${data.name} ACTIVE`;
+      this.audio?.announce('serverActive', `${data.name} is now active!`);
     } else if (data.phase === 'ended') {
       banner.className = '';
       banner.style.display = 'none';
@@ -357,13 +367,15 @@ class GameClient {
       // Update local player
       if (myPlayer) {
         this.game.updatePlayerPosition?.(myPlayer.x, myPlayer.y);
-        this.game.updateInventory?.(data.inventory || {
-          bombs: myPlayer.bombs,
-          oxygen: myPlayer.oxygen,
-          jumps: myPlayer.jumps,
-          dash: myPlayer.dash
-        });
+        const inv = data.inventory || { bombs: myPlayer.bombs, oxygen: myPlayer.oxygen, jumps: myPlayer.jumps, dash: myPlayer.dash };
+        this.game.updateInventory?.(inv);
         this.game.updateDragState?.(myPlayer.draggedWall);
+
+        // Pickup sounds
+        if (inv.gold > this._prevInventory.gold) this.audio?.playSound('coinPickup');
+        if (inv.oxygen > this._prevInventory.oxygen) this.audio?.playSound('dropletPickup');
+        this._prevInventory.gold = inv.gold ?? this._prevInventory.gold;
+        this._prevInventory.oxygen = inv.oxygen ?? this._prevInventory.oxygen;
       }
 
       // Update world
@@ -403,8 +415,23 @@ class GameClient {
     const player = this.players.get(data.playerId);
     if (player) {
       player.isDead = true;
-      this.addChatMessage(`${window.getPlayerName(data.playerId)} died: ${data.reason}`, true);
+      const name = window.getPlayerName(data.playerId);
+      this.addChatMessage(`${name} died: ${data.reason}`, true);
+      if (data.playerId === this.playerId) {
+        this.audio?.announce('playerDied', 'You died!');
+      } else {
+        this.audio?.playSound('playerDied');
+      }
     }
+  }
+
+  handleGameOver(data) {
+    this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true);
+    const isVictory = data.winner === 'Players';
+    this.audio?.announce(
+      isVictory ? 'gameOverWin' : 'gameOverLose',
+      isVictory ? 'Victory! Players win!' : `Game over. ${data.winner} wins.`
+    );
   }
 
   /**
@@ -418,6 +445,7 @@ class GameClient {
 
     if (data.player.id !== this.playerId) {
       this.addChatMessage(`${window.getPlayerName(data.player.id)} joined the room`, true);
+      this.audio?.playSound('playerJoined');
       // Initiate voice connection to new player
       this.voiceManager?.createPeerConnection(data.player.id, true);
     }
@@ -433,6 +461,7 @@ class GameClient {
     this.players.delete(data.playerId);
     console.log('Player left:', data.playerId);
     this.addChatMessage(`${this.getPlayerName(data.playerId)} left the room`, true);
+    this.audio?.playSound('playerLeft');
     this.voiceManager?.removePeer(data.playerId);
   }
 
