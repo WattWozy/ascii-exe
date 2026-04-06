@@ -584,6 +584,7 @@
 
     const keyMap = { 'ArrowUp': [0, -1], 'ArrowDown': [0, 1], 'ArrowLeft': [-1, 0], 'ArrowRight': [1, 0], 'w': [0, -1], 's': [0, 1], 'a': [-1, 0] };
     let lastDir = null;
+    let gravityInverted = false;
 
     /**
      * Goal: Handle keyboard input for movement and actions.
@@ -625,7 +626,8 @@
       if (!keyMap[k]) return;
       e.preventDefault();
 
-      const [dx, dy] = keyMap[k];
+      let [dx, dy] = keyMap[k];
+      if (gravityInverted) { dx = -dx; dy = -dy; }
       lastDir = [dx, dy];
       const nx = player.x + dx, ny = player.y + dy;
 
@@ -808,7 +810,8 @@
       setPlayerPosition, updatePlayerPosition,
       updateAliens, updateOtherPlayers,
       applyMapChanges, updateBoxes, updateBombs, updateBomb, updateInventory,
-      updateDragState, updateGamePhase, updateDarkRoomMode
+      updateDragState, updateGamePhase, updateDarkRoomMode,
+      setGravityInverted(val) { gravityInverted = val; }
     };
   }
 

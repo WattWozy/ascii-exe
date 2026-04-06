@@ -300,9 +300,11 @@ class GameClient {
       banner.className = 'active';
       banner.textContent = `▶  ${data.name} ACTIVE`;
       this.audio?.announce('serverActive', `${data.name} is now active!`);
+      if (data.id === 'GRAVITY_MALFUNCTION') this.game?.setGravityInverted?.(true);
     } else if (data.phase === 'ended') {
       banner.className = '';
       banner.style.display = 'none';
+      if (data.id === 'GRAVITY_MALFUNCTION') this.game?.setGravityInverted?.(false);
     }
   }
 

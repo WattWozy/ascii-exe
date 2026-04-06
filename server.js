@@ -496,23 +496,14 @@ class KingOfTheHillMode extends GameModeHandler {
 
 const SERVER_EVENTS = [
   {
-    id: 'ALIEN_SURGE',
-    name: 'ALIEN SURGE',
-    description: 'A wave of aliens floods the sector!',
-    type: 'destructive',
-    duration: 20000,
-    canActivate: (room) => room.settings.enableAliens,
-    execute(room) {
-      const before = room.aliens.length;
-      room._spawnAliens(3);
-      this._surgeCount = room.aliens.length - before;
-    },
-    cleanup(room) {
-      if (this._surgeCount > 0) {
-        room.aliens.splice(room.aliens.length - this._surgeCount, this._surgeCount);
-        this._surgeCount = 0;
-      }
-    }
+    id: 'GRAVITY_MALFUNCTION',
+    name: 'GRAVITY MALFUNCTION',
+    description: 'Gravitational systems inverted — controls reversed!',
+    type: 'modificative',
+    duration: 12000,
+    canActivate: () => true,
+    execute() {},
+    cleanup() {}
   },
   {
     id: 'O2_DRAIN',
@@ -646,7 +637,7 @@ class ServerEventSystem {
   }
 
   _scheduleNext() {
-    const delay = 20000 + Math.random() * 20000; // 20–40s
+    const delay = 12000 + Math.random() * 13000; // 12–25s
     this._timer = setTimeout(() => this._triggerRandom(), delay);
   }
 
