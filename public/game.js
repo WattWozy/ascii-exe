@@ -354,11 +354,8 @@
             // Wall tiles get a filled background for a solid, chunky look
             const isWall = curr.char === TILE_WALL;
             const isPushable = curr.char === TILE_PUSH;
-            if (isWall) {
+            if (isWall || isPushable) {
               canvasCtx.fillStyle = '#1a0e2e';
-              canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
-            } else if (isPushable) {
-              canvasCtx.fillStyle = '#1a0e04';
               canvasCtx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
             } else {
               canvasCtx.fillStyle = COLOR_MAP.floor;
@@ -367,8 +364,13 @@
 
             // Draw character if not empty/space
             if (curr.char && curr.char !== ' ') {
+              canvasCtx.save();
+              canvasCtx.beginPath();
+              canvasCtx.rect(tx, ty, TILE_SIZE, TILE_SIZE);
+              canvasCtx.clip();
               canvasCtx.fillStyle = curr.color;
               canvasCtx.fillText(curr.char, tx + TILE_SIZE / 2, ty + TILE_SIZE / 2);
+              canvasCtx.restore();
             }
           }
         }
