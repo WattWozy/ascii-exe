@@ -13,9 +13,9 @@
 
 
     _   ___ _____ ___ __  __ ___ ___   ___ ___
-   /_\ | _ \_   _| __|  \/  |_ _/ __| |_ _|_ _|
+    /_\ | _ \_   _| __|  \/  |_ _/ __| |_ _|_ _|
   / _ \|   / | | | _|| |\/| || |\__ \  | | | |
- /_/ \_\_|_\ |_| |___|_|  |_|___|___/ |___|___|
+  /_/ \_\_|_\ |_| |___|_|  |_|___|___/ |___|___|
     </pre>
 
     <div class="page-layout">
@@ -53,7 +53,8 @@
                         <label for="playerName" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">YOUR
                             NAME</label>
                         <input type="text" id="playerName" placeholder="enter name..." maxlength="20"
-                            style="width:160px;text-align:center;" oninput="localStorage.setItem('playerName', this.value)">
+                            style="width:160px;text-align:center;"
+                            oninput="localStorage.setItem('playerName', this.value)">
                     </div>
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
                         <label for="playerEmail" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">EMAIL
@@ -85,8 +86,10 @@
                 <div id="leaderboard-section"
                     style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:8px;padding:15px;box-sizing:border-box;">
                     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
-                        <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">SYMBOL RACE — TOP TIMES</div>
-                        <div id="leaderboard-total" style="font-size:10px;color:var(--dim-color);letter-spacing:1px;"></div>
+                        <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">SYMBOL RACE — TOP TIMES
+                        </div>
+                        <div id="leaderboard-total" style="font-size:10px;color:var(--dim-color);letter-spacing:1px;">
+                        </div>
                     </div>
                     <div id="leaderboard-list" style="font-size:13px;color:var(--dim-color);">loading...</div>
                 </div>
@@ -94,6 +97,9 @@
 
             <div class="footer">
                 [ SYSTEM READY ]<span class="blink">_</span>
+            </div>
+            <div class="footer">
+                [ FROM SWEDEN W/ L0V3 ]<span>/WOZNIAK</span>
             </div>
         </div>
 
@@ -105,7 +111,8 @@
             </div>
 
             <div class="comment-form">
-                <textarea id="commentText" class="comment-textarea" placeholder="broadcast a message to all players..." maxlength="200" rows="3"></textarea>
+                <textarea id="commentText" class="comment-textarea" placeholder="broadcast a message to all players..."
+                    maxlength="200" rows="3"></textarea>
                 <div class="comment-form-footer">
                     <span id="comment-chars" class="comment-chars">200</span>
                     <button id="post-btn" class="post-btn" onclick="postComment()">TRANSMIT</button>

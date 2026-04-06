@@ -442,10 +442,7 @@ class GameClient {
   handleGameOver(data) {
     this.addChatMessage(`GAME OVER! Winner: ${data.winner}`, true);
     const isVictory = data.winner === 'Players';
-    this.audio?.announce(
-      isVictory ? 'gameOverWin' : 'gameOverLose',
-      isVictory ? 'Victory! Players win!' : `Game over. ${data.winner} wins.`
-    );
+    this.audio?.playSound(isVictory ? 'gameOverWin' : 'gameOverLose');
   }
 
   /**
