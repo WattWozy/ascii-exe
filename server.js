@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -613,6 +614,9 @@ class RaceMode extends GameModeHandler {
 
   handleCollect(player, x, y, tile) {
     if (tile !== TILES.RACE_SYMBOL) return false;
+    // Ignore if game is over or this player already finished
+    if (this.room.state.phase !== PHASES.PLAYING) return false;
+    if (this.rankings.find(r => r.playerId === player.id)) return false;
 
     if (this.playerProgress[player.id] === undefined) this.playerProgress[player.id] = 0;
     this.playerProgress[player.id]++;
@@ -639,7 +643,7 @@ class RaceMode extends GameModeHandler {
     const elapsed = parseFloat(((Date.now() - this.gameStartTime) / 1000).toFixed(1));
     this.rankings.push({
       playerId: player.id,
-      name: getPlayerName(player.id),
+      name: player.displayName || getPlayerName(player.id),
       count: this.playerProgress[player.id],
       finishTime: elapsed,
       rank: this.rankings.length + 1
@@ -651,7 +655,7 @@ class RaceMode extends GameModeHandler {
       if (!this.rankings.find(r => r.playerId === p.id)) {
         remaining.push({
           playerId: p.id,
-          name: getPlayerName(p.id),
+          name: p.displayName || getPlayerName(p.id),
           count: this.playerProgress[p.id] || 0,
           finishTime: null,
           rank: null
@@ -715,21 +719,22 @@ class RaceMode extends GameModeHandler {
       rankings.map(r => ({ rank: r.rank, name: r.name, count: r.count, time: r.finishTime })),
       null, 2
     ));
-    // const { createClient } = require('@supabase/supabase-js');
-    // const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-    // supabase.from('race_results').insert(
-    //   rankings.map(r => ({
-    //     room_id: this.room.roomId,
-    //     player_id: r.playerId,
-    //     player_name: r.name,
-    //     rank: r.rank,
-    //     symbols_collected: r.count,
-    //     finish_time_seconds: r.finishTime,
-    //   }))
-    // ).then(({ error }) => {
-    //   if (error) console.error('[Race] Supabase error:', error);
-    //   else console.log('[Race] Results saved to Supabase');
-    // });
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return;
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    supabase.from('race_results').insert(
+      rankings.map(r => ({
+        room_id: this.room.roomId,
+        player_id: r.playerId,
+        player_name: r.name,
+        rank: r.rank,
+        symbols_collected: r.count,
+        finish_time_seconds: r.finishTime,
+      }))
+    ).then(({ error }) => {
+      if (error) console.error('[Race] Supabase error:', error);
+      else console.log('[Race] Results saved to Supabase');
+    });
   }
 }
 
@@ -743,8 +748,8 @@ const SERVER_EVENTS = [
     type: 'modificative',
     duration: 12000,
     canActivate: () => true,
-    execute() {},
-    cleanup() {}
+    execute() { },
+    cleanup() { }
   },
   {
     id: 'O2_DRAIN',
@@ -760,7 +765,7 @@ const SERVER_EVENTS = [
         }
       });
     },
-    cleanup() {}
+    cleanup() { }
   },
   {
     id: 'METEOR_SHOWER',
@@ -821,7 +826,7 @@ const SERVER_EVENTS = [
       }
       if (changes.length > 0) room.broadcastMapChange(changes);
     },
-    cleanup() {}
+    cleanup() { }
   },
   {
     id: 'SPEED_BOOST',
@@ -1889,8 +1894,13 @@ wss.on('connection', (ws, req) => {
         // Add player to room
         currentRoom.addPlayer(playerId, ws);
 
-        // Send initialization data
+        // Store custom display name if provided
         const player = currentRoom.players.get(playerId);
+        if (settings.playerName) {
+          player.displayName = settings.playerName.trim().substring(0, 20) || null;
+        }
+
+        // Send initialization data
         ws.send(JSON.stringify({
           type: 'init',
           playerId,
@@ -2033,6 +2043,22 @@ function generatePlayerId() {
 
 
 // API endpoint to get room info (optional, for debugging)
+app.get('/api/leaderboard', async (req, res) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return res.json([]);
+  }
+  const { createClient } = require('@supabase/supabase-js');
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  const { data, error } = await supabase
+    .from('race_results')
+    .select('player_name, finish_time_seconds')
+    .eq('rank', 1)
+    .order('finish_time_seconds', { ascending: true })
+    .limit(10);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
 app.get('/api/rooms', (req, res) => {
   const roomList = Object.entries(rooms).map(([id, room]) => ({
     id,
