@@ -53,6 +53,7 @@
                     GAME MODE</div>
                 <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
                 <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
+                <button class="btn" onclick="startRace()">> SYMBOL RACE</button>
             </div>
 
             <div class="join-section">
@@ -123,6 +124,21 @@
 
         aliensCheckbox.addEventListener('change', updateEncloseButton);
         updateEncloseButton(); // Initial state
+
+        function startRace() {
+            const randomId = 'room_' + Math.random().toString(36).substr(2, 6);
+            const settings = {
+                enemyCount: 0,
+                dropletCount: 3,
+                boxCount: 3,
+                darkRoom: false,
+                enableAliens: false,
+                oxygenDepletion: false,
+                gameMode: 'RACE'
+            };
+            sessionStorage.setItem('roomSettings', JSON.stringify(settings));
+            window.location.href = `game.html?room=${randomId}`;
+        }
 
         function joinGame() {
             const room = document.getElementById('roomInput').value.trim();

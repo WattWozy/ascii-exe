@@ -11,7 +11,8 @@
         SURVIVAL: 'SURVIVAL',
         ROB_BANK: 'ROB_BANK',
         CAPTURE_FLAG: 'CAPTURE_FLAG',
-        KING_HILL: 'KING_HILL'
+        KING_HILL: 'KING_HILL',
+        RACE: 'RACE'
     };
 
     class GameState {

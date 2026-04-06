@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(netstat -ano)",
-      "Bash(findstr :3000)"
+      "Bash(findstr :3000)",
+      "Bash(node:*)"
     ]
   }
 }

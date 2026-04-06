@@ -33,6 +33,7 @@
       TILE_BASE_RED = (window.TILES && window.TILES.BASE_RED) || '[',
       TILE_BASE_BLUE = (window.TILES && window.TILES.BASE_BLUE) || ']',
       TILE_HILL = (window.TILES && window.TILES.HILL) || 'H',
+      TILE_RACE_SYMBOL = (window.TILES && window.TILES.RACE_SYMBOL) || '★',
       PUMP_VALUE_DEFAULT = 25,
       // Callbacks
       onSendMove = (x, y) => window.gameClient?.sendMove?.(x, y),
@@ -65,6 +66,7 @@
     // Game Phase
     let currentPhase = 'LOBBY';
     let winner = null;
+    let raceRankings = null;
     let started = false;
 
     // Dark-room mode
@@ -98,6 +100,7 @@
       base_red: '#660011',
       base_blue: '#001166',
       hill: '#aaff44',
+      race_symbol: '#ffee44',
       bomb_on: '#ff4422',
       bomb_off: '#ff9944',
       dragging: '#ffcc00',
@@ -296,6 +299,7 @@
         else if (ch === TILE_BASE_RED) { color = COLOR_MAP.base_red; classes.push('base-red'); }
         else if (ch === TILE_BASE_BLUE) { color = COLOR_MAP.base_blue; classes.push('base-blue'); }
         else if (ch === TILE_HILL) { color = COLOR_MAP.hill; classes.push('hill'); }
+        else if (ch === TILE_RACE_SYMBOL) { color = COLOR_MAP.race_symbol; classes.push('race-symbol'); }
       }
 
       // Bombs (Overlay)
@@ -557,6 +561,28 @@
     }
 
     function renderGameOverOverlay(el) {
+      const homeBtn = `<button onclick="if(window.gameClient) window.gameClient._disconnecting=true; window.location.href='/'" style="background: rgba(255,255,255,0.05); color: #e8eef6; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 16px; display: inline-flex; align-items: center; gap: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></button>`;
+
+      // Race mode: show full leaderboard
+      if (raceRankings && raceRankings.length > 0) {
+        const rows = raceRankings.map(r => {
+          const timeStr = r.finishTime != null ? `${r.finishTime}s` : `${r.count} ★`;
+          return `<tr>
+            <td style="padding:4px 14px 4px 0; color:#ffee44; font-weight:bold">#${r.rank}</td>
+            <td style="padding:4px 14px 4px 0; color:#e8eef6">${r.name}</td>
+            <td style="padding:4px 0; color:#aaffaa">${timeStr}</td>
+          </tr>`;
+        }).join('');
+        el.innerHTML = `
+          <div style="background: rgba(13,17,23,0.97); padding: 32px; border: 2px solid #ffee44; border-radius: 12px; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px #ffee4440; min-width: 320px; backdrop-filter: blur(4px); pointer-events: auto;">
+            <h1 style="color:#ffee44; margin:0 0 4px 0; font-size:28px; letter-spacing:2px;">RACE COMPLETE</h1>
+            <p style="color:#aab3c2; margin:0 0 20px 0; font-size:12px; text-transform:uppercase; letter-spacing:1px;">Winner: ${winner}</p>
+            <table style="margin:0 auto 24px; border-collapse:collapse; font-size:14px; text-align:left;">${rows}</table>
+            ${homeBtn}
+          </div>`;
+        return;
+      }
+
       const isVictory = winner === 'Players';
       const color = isVictory ? '#7cd67c' : '#ff6666';
       const title = isVictory ? 'VICTORY' : 'GAME OVER';
@@ -566,9 +592,7 @@
         <div style="background: rgba(13, 17, 23, 0.95); padding: 32px; border: 2px solid ${color}; border-radius: 12px; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 20px ${color}40; min-width: 300px; backdrop-filter: blur(4px); pointer-events: auto;">
           <h1 style="color: ${color}; margin: 0 0 8px 0; font-size: 32px; text-shadow: 0 0 10px ${color}40; letter-spacing: 2px;">${title}</h1>
           <p style="color: #aab3c2; margin: 0 0 24px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">${subtext}</p>
-          <button onclick="if(window.gameClient) window.gameClient._disconnecting=true; window.location.href='/'" style="background: rgba(255,255,255,0.05); color: #e8eef6; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 16px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-          </button>
+          ${homeBtn}
         </div>`;
     }
 
@@ -774,6 +798,23 @@
               <div class="stat-label"><span>YOUR TIME</span><span class="stat-value">${Math.floor(status.myScore / 10)}s</span></div>
             </div>`;
         }
+      } else if (status.type === 'RACE') {
+        title.textContent = 'SYMBOL RACE';
+        const pct = Math.min(100, Math.round((status.myCount / status.totalToWin) * 100));
+        html = `
+          <div class="stat-row">
+            <div class="stat-label"><span>YOUR SYMBOLS</span><span class="stat-value" style="color:#ffee44">${status.myCount}/${status.totalToWin}</span></div>
+            <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%; background:#ffee44"></div></div>
+          </div>`;
+        if (status.progress) {
+          const sorted = Object.entries(status.progress).sort((a, b) => b[1].count - a[1].count);
+          if (sorted.length > 0) {
+            html += `<div class="stat-row" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px;"><div class="stat-label"><span>ALL PLAYERS</span></div></div>`;
+            sorted.forEach(([name, data]) => {
+              html += `<div class="stat-row"><div class="stat-label"><span style="color:${data.color}">${name}</span><span class="stat-value">${data.count}/${status.totalToWin}</span></div></div>`;
+            });
+          }
+        }
       }
       content.innerHTML = html;
     }
@@ -783,9 +824,10 @@
       render();
     }
 
-    function updateGamePhase(phase, win) {
+    function updateGamePhase(phase, win, rankings) {
       currentPhase = phase;
       winner = win;
+      if (rankings && rankings.length > 0) raceRankings = rankings;
       render();
       if (phase === 'GAME_OVER') setTimeout(() => { if (window.gameClient) window.gameClient._disconnecting = true; window.location.href = '/'; }, 5000);
     }

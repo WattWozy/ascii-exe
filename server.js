@@ -492,6 +492,247 @@ class KingOfTheHillMode extends GameModeHandler {
   }
 }
 
+// ─── Race Mode ────────────────────────────────────────────────────────────────
+
+class RaceMode extends GameModeHandler {
+  constructor(gameRoom) {
+    super(gameRoom);
+    this.room = gameRoom;
+    this.totalToWin = 5;      // symbols a player needs to collect to win
+    this.maxOnMap = 5;        // max symbols present on map at once
+    this.playerProgress = {}; // playerId -> count collected
+    this.rankings = [];       // ordered finishers [{playerId, name, count, finishTime, rank}]
+    this.timedWalls = [];     // [{x, y, isWall}] — walls that toggle on a timer
+    this._timedWallTimer = null;
+    this._symbolSpawnTimer = null;
+    this.symbolsOnMap = 0;
+    this.gameStartTime = 0;
+  }
+
+  init() {
+    this.gameStartTime = Date.now();
+    this.room.players.forEach(p => { this.playerProgress[p.id] = 0; });
+    this._initTimedWalls();
+    this._spawnSymbols(2); // start with 2 symbols; more appear over time
+    this._startSymbolSpawner();
+    this._startTimedWalls();
+  }
+
+  onPlayerJoin(player) {
+    if (this.playerProgress[player.id] === undefined) {
+      this.playerProgress[player.id] = 0;
+    }
+  }
+
+  _initTimedWalls() {
+    const playerPositions = new Set();
+    this.room.players.forEach(p => playerPositions.add(`${p.x},${p.y}`));
+    const candidates = [];
+    for (let y = 2; y < this.room.height - 2; y++) {
+      for (let x = 2; x < this.room.width - 2; x++) {
+        if (this.room.map[y][x] === TILES.FLOOR && !playerPositions.has(`${x},${y}`)) {
+          candidates.push({ x, y });
+        }
+      }
+    }
+    const count = Math.min(8, Math.max(4, Math.floor(candidates.length * 0.03)));
+    for (let i = 0; i < count; i++) {
+      if (candidates.length === 0) break;
+      const idx = Math.floor(Math.random() * candidates.length);
+      const { x, y } = candidates.splice(idx, 1)[0];
+      this.timedWalls.push({ x, y, isWall: false });
+    }
+  }
+
+  _startTimedWalls() {
+    this._timedWallTimer = setInterval(() => {
+      if (this.room.state.phase !== PHASES.PLAYING) return;
+      this._toggleTimedWalls();
+    }, 4000);
+  }
+
+  _toggleTimedWalls() {
+    const changes = [];
+    const playerPositions = new Set();
+    this.room.players.forEach(p => { if (!p.isDead) playerPositions.add(`${p.x},${p.y}`); });
+
+    for (const wall of this.timedWalls) {
+      if (!wall.isWall) {
+        if (!playerPositions.has(`${wall.x},${wall.y}`)) {
+          wall.isWall = true;
+          this.room.map[wall.y][wall.x] = TILES.WALL;
+          changes.push({ x: wall.x, y: wall.y, tile: TILES.WALL });
+        }
+      } else {
+        wall.isWall = false;
+        this.room.map[wall.y][wall.x] = TILES.FLOOR;
+        changes.push({ x: wall.x, y: wall.y, tile: TILES.FLOOR });
+      }
+    }
+    if (changes.length > 0) this.room.broadcastMapChange(changes);
+  }
+
+  _startSymbolSpawner() {
+    // Spawn a new symbol every 8 s if below cap
+    this._symbolSpawnTimer = setInterval(() => {
+      if (this.room.state.phase !== PHASES.PLAYING) return;
+      if (this.symbolsOnMap < this.maxOnMap) this._spawnOneSymbol();
+    }, 8000);
+  }
+
+  _spawnSymbols(count) {
+    const changes = [];
+    let placed = 0;
+    let attempts = 0;
+    while (placed < count && attempts < 500) {
+      attempts++;
+      const x = Math.floor(Math.random() * (this.room.width - 2)) + 1;
+      const y = Math.floor(Math.random() * (this.room.height - 2)) + 1;
+      if (this.room.map[y][x] === TILES.FLOOR) {
+        this.room.map[y][x] = TILES.RACE_SYMBOL;
+        changes.push({ x, y, tile: TILES.RACE_SYMBOL });
+        placed++;
+        this.symbolsOnMap++;
+      }
+    }
+    if (changes.length > 0) this.room.broadcastMapChange(changes);
+  }
+
+  _spawnOneSymbol() {
+    for (let attempts = 0; attempts < 200; attempts++) {
+      const x = Math.floor(Math.random() * (this.room.width - 2)) + 1;
+      const y = Math.floor(Math.random() * (this.room.height - 2)) + 1;
+      if (this.room.map[y][x] === TILES.FLOOR) {
+        this.room.map[y][x] = TILES.RACE_SYMBOL;
+        this.symbolsOnMap++;
+        this.room.broadcastMapChange([{ x, y, tile: TILES.RACE_SYMBOL }]);
+        return;
+      }
+    }
+  }
+
+  handleCollect(player, x, y, tile) {
+    if (tile !== TILES.RACE_SYMBOL) return false;
+
+    if (this.playerProgress[player.id] === undefined) this.playerProgress[player.id] = 0;
+    this.playerProgress[player.id]++;
+    this.symbolsOnMap = Math.max(0, this.symbolsOnMap - 1);
+    this.room.map[y][x] = TILES.FLOOR;
+    this.room.broadcastMapChange([{ x, y, tile: TILES.FLOOR }]);
+
+    const count = this.playerProgress[player.id];
+
+    // Immediately replace the collected symbol
+    this._spawnOneSymbol();
+
+    this.room.chatHistory.push({
+      type: 'system',
+      message: `${getPlayerName(player.id)} collected symbol ${count}/${this.totalToWin}!`,
+      timestamp: Date.now()
+    });
+
+    if (count >= this.totalToWin) this._onPlayerFinished(player);
+    return true;
+  }
+
+  _onPlayerFinished(player) {
+    const elapsed = parseFloat(((Date.now() - this.gameStartTime) / 1000).toFixed(1));
+    this.rankings.push({
+      playerId: player.id,
+      name: getPlayerName(player.id),
+      count: this.playerProgress[player.id],
+      finishTime: elapsed,
+      rank: this.rankings.length + 1
+    });
+
+    // Remaining players ranked by symbols collected
+    const remaining = [];
+    this.room.players.forEach(p => {
+      if (!this.rankings.find(r => r.playerId === p.id)) {
+        remaining.push({
+          playerId: p.id,
+          name: getPlayerName(p.id),
+          count: this.playerProgress[p.id] || 0,
+          finishTime: null,
+          rank: null
+        });
+      }
+    });
+    remaining.sort((a, b) => b.count - a.count);
+    remaining.forEach((r, i) => { r.rank = this.rankings.length + i + 1; });
+
+    const fullRankings = [...this.rankings, ...remaining];
+
+    // Store in modeState so stateUpdate broadcasts carry rankings to clients
+    this.room.state.modeState = { rankings: fullRankings };
+
+    this._saveRaceResults(fullRankings);
+    this._stopTimers();
+
+    this.room.state.setPhase(PHASES.GAME_OVER);
+    this.room.state.winner = player.id;
+    this.room.broadcast({ type: 'gameOver', winner: getPlayerName(player.id), rankings: fullRankings });
+  }
+
+  _stopTimers() {
+    if (this._timedWallTimer) { clearInterval(this._timedWallTimer); this._timedWallTimer = null; }
+    if (this._symbolSpawnTimer) { clearInterval(this._symbolSpawnTimer); this._symbolSpawnTimer = null; }
+    // Restore all timed walls to floor so map stays walkable after game over
+    const changes = [];
+    for (const wall of this.timedWalls) {
+      if (wall.isWall) {
+        wall.isWall = false;
+        this.room.map[wall.y][wall.x] = TILES.FLOOR;
+        changes.push({ x: wall.x, y: wall.y, tile: TILES.FLOOR });
+      }
+    }
+    if (changes.length > 0) this.room.broadcastMapChange(changes);
+  }
+
+  update() {
+    if (this.room.state.phase !== PHASES.PLAYING) return;
+    // Win condition handled in handleCollect
+  }
+
+  // ── Supabase Integration Stub ──────────────────────────────────────────────
+  // To enable persistent leaderboards:
+  //   1. npm install @supabase/supabase-js
+  //   2. Set env vars: SUPABASE_URL, SUPABASE_SERVICE_KEY
+  //   3. Create table in Supabase:
+  //        CREATE TABLE race_results (
+  //          id                   uuid primary key default gen_random_uuid(),
+  //          room_id              text not null,
+  //          player_id            text not null,
+  //          player_name          text not null,
+  //          rank                 int not null,
+  //          symbols_collected    int not null,
+  //          finish_time_seconds  float,   -- null if player did not finish
+  //          played_at            timestamptz default now()
+  //        );
+  //   4. Uncomment the block below.
+  _saveRaceResults(rankings) {
+    console.log('[Race] Results:', JSON.stringify(
+      rankings.map(r => ({ rank: r.rank, name: r.name, count: r.count, time: r.finishTime })),
+      null, 2
+    ));
+    // const { createClient } = require('@supabase/supabase-js');
+    // const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    // supabase.from('race_results').insert(
+    //   rankings.map(r => ({
+    //     room_id: this.room.roomId,
+    //     player_id: r.playerId,
+    //     player_name: r.name,
+    //     rank: r.rank,
+    //     symbols_collected: r.count,
+    //     finish_time_seconds: r.finishTime,
+    //   }))
+    // ).then(({ error }) => {
+    //   if (error) console.error('[Race] Supabase error:', error);
+    //   else console.log('[Race] Results saved to Supabase');
+    // });
+  }
+}
+
 // ─── Server Event System ──────────────────────────────────────────────────────
 
 const SERVER_EVENTS = [
@@ -722,6 +963,9 @@ class GameRoom {
         break;
       case MODES.KING_HILL:
         this.modeHandler = new KingOfTheHillMode(this);
+        break;
+      case MODES.RACE:
+        this.modeHandler = new RaceMode(this);
         break;
       case MODES.SURVIVAL:
       default:
@@ -1414,6 +1658,21 @@ class GameRoom {
         scores: namedScores,
         myScore: this.modeHandler.scores[player.id] || 0
       };
+    } else if (this.modeHandler instanceof RaceMode) {
+      const progress = {};
+      this.players.forEach(p => {
+        progress[getPlayerName(p.id)] = {
+          count: this.modeHandler.playerProgress[p.id] || 0,
+          color: p.color
+        };
+      });
+      return {
+        type: 'RACE',
+        myCount: this.modeHandler.playerProgress[player.id] || 0,
+        totalToWin: this.modeHandler.totalToWin,
+        progress,
+        rankings: this.modeHandler.rankings
+      };
     }
     return null;
   }
@@ -1567,6 +1826,20 @@ class GameRoom {
     });
   }
 
+  _startRaceCountdown() {
+    let count = 3;
+    const tick = () => {
+      if (count > 0) {
+        this.broadcast({ type: 'countdown', count });
+        count--;
+        setTimeout(tick, 1000);
+      } else {
+        this.startGame(this.hostId);
+      }
+    };
+    tick();
+  }
+
   startGame(playerId) {
     if (playerId !== this.hostId) return; // Only host can start
     if (this.state.phase !== PHASES.LOBBY) return;
@@ -1649,7 +1922,11 @@ wss.on('connection', (ws, req) => {
         }));
 
         // Broadcast lobby update AFTER init so client knows its playerId
-        currentRoom.broadcastLobbyState();
+        if (currentRoom.settings.gameMode === MODES.RACE) {
+          currentRoom._startRaceCountdown();
+        } else {
+          currentRoom.broadcastLobbyState();
+        }
 
         // Notify others in room
         const newPlayer = currentRoom.players.get(playerId);

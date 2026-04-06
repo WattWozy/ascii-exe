@@ -208,6 +208,7 @@ class GameClient {
       'playerLeft': () => this.handlePlayerLeft(data),
       'chat': () => this.handleChat(data),
       'lobbyUpdate': () => this.handleLobbyUpdate(data),
+      'countdown': () => this.handleCountdown(data),
       'gameStarted': () => this.handleGameStarted(data),
       'voice-signal': () => this.voiceManager?.handleSignal(data),
       'alienDied': () => this.audio?.playSound('alienDeath'),
@@ -256,6 +257,16 @@ class GameClient {
     const isHost = data.hostId === this.playerId;
     if (startBtn) startBtn.style.display = isHost ? 'inline-block' : 'none';
     if (waitingMsg) waitingMsg.style.display = isHost ? 'none' : 'block';
+  }
+
+  handleCountdown(data) {
+    const overlay = document.getElementById('lobby-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `<div class="overlay-content" style="text-align:center;padding:40px;">
+      <div style="font-size:96px;color:#fff;font-family:monospace;line-height:1;">${data.count}</div>
+      <div style="font-size:14px;color:#7b8596;letter-spacing:3px;margin-top:16px;">GET READY</div>
+    </div>`;
   }
 
   handleGameStarted(data) {
@@ -383,7 +394,7 @@ class GameClient {
       // Update world
       this.game.updateOtherPlayers?.(this.getOtherPlayers());
       this.syncGameState(data.gameState);
-      this.game.updateGamePhase?.(data.gameState.phase, data.gameState.winner);
+      this.game.updateGamePhase?.(data.gameState.phase, data.gameState.winner, data.gameState.rankings);
     }
   }
 

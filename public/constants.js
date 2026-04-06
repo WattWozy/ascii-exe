@@ -14,7 +14,8 @@
         FLAG_BLUE: '⚐',
         BASE_RED: '◧',
         BASE_BLUE: '◨',
-        HILL: '▲'
+        HILL: '▲',
+        RACE_SYMBOL: '★'
     };
 
     const ITEM_INFO = {
