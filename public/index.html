@@ -9,90 +9,113 @@
 </head>
 
 <body>
-    <div class="container">
-        <pre class="ascii-art">
+    <pre class="ascii-art">
 
 
     _   ___ _____ ___ __  __ ___ ___   ___ ___
    /_\ | _ \_   _| __|  \/  |_ _/ __| |_ _|_ _|
   / _ \|   / | | | _|| |\/| || |\__ \  | | | |
  /_/ \_\_|_\ |_| |___|_|  |_|___|___/ |___|___|
-        </pre>
+    </pre>
 
-        <div class="menu">
-            <div class="settings-container">
-                <div class="setting-group">
-                    <label for="enemyCount">ALIENS</label>
-                    <input type="number" id="enemyCount" value="3" min="0" max="20" class="setting-input">
-                </div>
-                <div class="setting-group">
-                    <label for="dropletCount">OXYGEN</label>
-                    <input type="number" id="dropletCount" value="5" min="0" max="50" class="setting-input">
-                </div>
-                <div class="setting-group">
-                    <label for="boxCount">BOXES</label>
-                    <input type="number" id="boxCount" value="5" min="0" max="50" class="setting-input">
-                </div>
-                <div class="setting-group">
-                    <label for="enableAliens">ALIENS</label>
-                    <input type="checkbox" id="enableAliens" class="setting-checkbox" checked>
-                </div>
-                <div class="setting-group">
-                    <label for="oxygenDepletion">O2 DEPLETE</label>
-                    <input type="checkbox" id="oxygenDepletion" class="setting-checkbox" checked>
-                </div>
-                <div class="setting-group">
-                    <label for="darkRoom">DARK</label>
-                    <input type="checkbox" id="darkRoom" class="setting-checkbox">
-                </div>
-            </div>
-
-            <div style="display:flex;gap:12px;justify-content:center;width:100%;flex-wrap:wrap;">
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                    <label for="playerName" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">YOUR
-                        NAME</label>
-                    <input type="text" id="playerName" placeholder="enter name..." maxlength="20"
-                        style="width:160px;text-align:center;" oninput="localStorage.setItem('playerName', this.value)">
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                    <label for="playerEmail" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">EMAIL
-                        (not shared)</label>
-                    <input type="email" id="playerEmail" placeholder="your@email.com"
-                        style="width:200px;text-align:center;"
-                        oninput="localStorage.setItem('playerEmail', this.value)">
-                </div>
-                <div
-                    style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:2px;">
-                    <button id="rank-btn" onclick="checkMyRank()" title="Check your rank"
-                        style="background:none;border:1px solid var(--border-color);color:var(--dim-color);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1;transition:color 0.2s,border-color 0.2s;"
-                        onmouseover="this.style.color='var(--accent-color)';this.style.borderColor='var(--accent-color)'"
-                        onmouseout="this.style.color='var(--dim-color)';this.style.borderColor='var(--border-color)'">&#x1F3C6;</button>
-                    <div id="rank-result"
-                        style="font-size:10px;color:var(--accent-color);letter-spacing:1px;margin-top:4px;min-height:14px;text-align:center;">
+    <div class="page-layout">
+        <div class="container">
+            <div class="menu">
+                <div class="settings-container">
+                    <div class="setting-group">
+                        <label for="enemyCount">ALIENS</label>
+                        <input type="number" id="enemyCount" value="3" min="0" max="20" class="setting-input">
+                    </div>
+                    <div class="setting-group">
+                        <label for="dropletCount">OXYGEN</label>
+                        <input type="number" id="dropletCount" value="5" min="0" max="50" class="setting-input">
+                    </div>
+                    <div class="setting-group">
+                        <label for="boxCount">BOXES</label>
+                        <input type="number" id="boxCount" value="5" min="0" max="50" class="setting-input">
+                    </div>
+                    <div class="setting-group">
+                        <label for="enableAliens">ALIENS</label>
+                        <input type="checkbox" id="enableAliens" class="setting-checkbox" checked>
+                    </div>
+                    <div class="setting-group">
+                        <label for="oxygenDepletion">O2 DEPLETE</label>
+                        <input type="checkbox" id="oxygenDepletion" class="setting-checkbox" checked>
+                    </div>
+                    <div class="setting-group">
+                        <label for="darkRoom">DARK</label>
+                        <input type="checkbox" id="darkRoom" class="setting-checkbox">
                     </div>
                 </div>
-            </div>
 
-            <div style="display:flex;flex-direction:column;gap:10px;width:100%;align-items:center;">
-                <div style="color:var(--dim-color);font-size:12px;letter-spacing:2px;margin-bottom:5px;">SELECT GAME
-                    MODE</div>
-                <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
-                <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
-                <button class="btn" onclick="startRace()">> SYMBOL RACE</button>
-            </div>
-
-            <div id="leaderboard-section"
-                style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:8px;padding:15px;box-sizing:border-box;">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
-                    <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">SYMBOL RACE — TOP TIMES</div>
-                    <div id="leaderboard-total" style="font-size:10px;color:var(--dim-color);letter-spacing:1px;"></div>
+                <div style="display:flex;gap:12px;justify-content:center;width:100%;flex-wrap:wrap;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                        <label for="playerName" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">YOUR
+                            NAME</label>
+                        <input type="text" id="playerName" placeholder="enter name..." maxlength="20"
+                            style="width:160px;text-align:center;" oninput="localStorage.setItem('playerName', this.value)">
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                        <label for="playerEmail" style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">EMAIL
+                            (not shared)</label>
+                        <input type="email" id="playerEmail" placeholder="your@email.com"
+                            style="width:200px;text-align:center;"
+                            oninput="localStorage.setItem('playerEmail', this.value)">
+                    </div>
+                    <div
+                        style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:2px;">
+                        <button id="rank-btn" onclick="checkMyRank()" title="Check your rank"
+                            style="background:none;border:1px solid var(--border-color);color:var(--dim-color);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:4px;line-height:1;transition:color 0.2s,border-color 0.2s;"
+                            onmouseover="this.style.color='var(--accent-color)';this.style.borderColor='var(--accent-color)'"
+                            onmouseout="this.style.color='var(--dim-color)';this.style.borderColor='var(--border-color)'">&#x1F3C6;</button>
+                        <div id="rank-result"
+                            style="font-size:10px;color:var(--accent-color);letter-spacing:1px;margin-top:4px;min-height:14px;text-align:center;">
+                        </div>
+                    </div>
                 </div>
-                <div id="leaderboard-list" style="font-size:13px;color:var(--dim-color);">loading...</div>
+
+                <div style="display:flex;flex-direction:column;gap:10px;width:100%;align-items:center;">
+                    <div style="color:var(--dim-color);font-size:12px;letter-spacing:2px;margin-bottom:5px;">SELECT GAME
+                        MODE</div>
+                    <button class="btn" id="btn-enclose" onclick="startNewGame('SURVIVAL')">> ENCLOSE</button>
+                    <button class="btn" onclick="startNewGame('CAPTURE_FLAG')">> CAPTURE THE FLAG</button>
+                    <button class="btn" onclick="startRace()">> SYMBOL RACE</button>
+                </div>
+
+                <div id="leaderboard-section"
+                    style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:8px;padding:15px;box-sizing:border-box;">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
+                        <div style="font-size:10px;color:var(--dim-color);letter-spacing:2px;">SYMBOL RACE — TOP TIMES</div>
+                        <div id="leaderboard-total" style="font-size:10px;color:var(--dim-color);letter-spacing:1px;"></div>
+                    </div>
+                    <div id="leaderboard-list" style="font-size:13px;color:var(--dim-color);">loading...</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                [ SYSTEM READY ]<span class="blink">_</span>
             </div>
         </div>
 
-        <div class="footer">
-            [ SYSTEM READY ]<span class="blink">_</span>
+        <!-- TRANSMISSIONS SIDE PANEL -->
+        <div class="comments-panel">
+            <div class="comments-panel-header">
+                <div class="panel-title">TRANSMISSIONS</div>
+                <div id="comments-count" class="panel-subtitle"></div>
+            </div>
+
+            <div class="comment-form">
+                <textarea id="commentText" class="comment-textarea" placeholder="broadcast a message to all players..." maxlength="200" rows="3"></textarea>
+                <div class="comment-form-footer">
+                    <span id="comment-chars" class="comment-chars">200</span>
+                    <button id="post-btn" class="post-btn" onclick="postComment()">TRANSMIT</button>
+                </div>
+                <div id="comment-status" class="comment-status"></div>
+            </div>
+
+            <div id="comments-list" class="comments-list">
+                <div class="comments-loading">connecting...</div>
+            </div>
         </div>
     </div>
 
@@ -217,6 +240,105 @@
                 btn.textContent = '\u{1F3C6}';
                 result.style.color = '#ff6666';
                 result.textContent = 'unavailable';
+            }
+        }
+
+        // ── TRANSMISSIONS PANEL ───────────────────────────────────────────────
+
+        const commentTextEl = document.getElementById('commentText');
+        const commentCharsEl = document.getElementById('comment-chars');
+        commentTextEl.addEventListener('input', () => {
+            commentCharsEl.textContent = 200 - commentTextEl.value.length;
+        });
+
+        function timeAgo(isoString) {
+            const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        async function loadComments() {
+            const list = document.getElementById('comments-list');
+            const countEl = document.getElementById('comments-count');
+            try {
+                const res = await fetch('/api/comments');
+                const data = await res.json();
+                if (!data.length) {
+                    list.innerHTML = '<div class="comments-loading">no transmissions yet</div>';
+                    countEl.textContent = '';
+                    return;
+                }
+                countEl.textContent = `${data.length} active`;
+                list.innerHTML = data.map(c => {
+                    const color = c.player_color || 'var(--dim-color)';
+                    const name = c.player_name || 'UNKNOWN';
+                    const ago = timeAgo(c.updated_at);
+                    return `<div class="comment-item">
+                        <div class="comment-meta">
+                            <span class="comment-name" style="color:${color}">${name}</span>
+                            <span class="comment-time">${ago}</span>
+                        </div>
+                        <div class="comment-body">${c.message}</div>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="comments-loading">unavailable</div>';
+            }
+        }
+        loadComments();
+        setInterval(loadComments, 30000);
+
+        async function postComment() {
+            const email = document.getElementById('playerEmail').value.trim();
+            const name = document.getElementById('playerName').value.trim();
+            const message = commentTextEl.value.trim();
+            const statusEl = document.getElementById('comment-status');
+            const btn = document.getElementById('post-btn');
+
+            if (!email || !email.includes('@')) {
+                statusEl.style.color = '#ff6666';
+                statusEl.textContent = 'fill in your email above first';
+                document.getElementById('playerEmail').style.borderColor = '#ff6666';
+                return;
+            }
+            document.getElementById('playerEmail').style.borderColor = '';
+
+            if (!message) {
+                statusEl.style.color = '#ff6666';
+                statusEl.textContent = 'message cannot be empty';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '...';
+            statusEl.textContent = '';
+
+            try {
+                const res = await fetch('/api/comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_name: name, player_email: email, message })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    statusEl.style.color = '#ff6666';
+                    statusEl.textContent = data.error || 'error';
+                } else {
+                    statusEl.style.color = 'var(--accent-color)';
+                    statusEl.textContent = 'transmitted';
+                    commentTextEl.value = '';
+                    commentCharsEl.textContent = '200';
+                    loadComments();
+                    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                }
+            } catch {
+                statusEl.style.color = '#ff6666';
+                statusEl.textContent = 'unavailable';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'TRANSMIT';
             }
         }
     </script>

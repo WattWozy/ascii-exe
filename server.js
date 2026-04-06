@@ -51,6 +51,7 @@ const wss = new WebSocket.Server({ server });
 
 // Serve static files (your HTML and JS files)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 // Game rooms - each room has its own isolated game state
 const rooms = {};
@@ -2135,6 +2136,44 @@ app.get('/api/my-rank', async (req, res) => {
   }
   const rank = seen.size + 1;
   res.json({ rank, bestTime });
+});
+
+app.get('/api/comments', async (req, res) => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return res.json([]);
+  const { createClient } = require('@supabase/supabase-js');
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  const { data, error } = await supabase
+    .from('player_last_comment')
+    .select('player_name, player_color, message, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(20);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post('/api/comment', async (req, res) => {
+  const { player_name, player_email, player_color, message } = req.body || {};
+  if (!player_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(player_email)) {
+    return res.status(400).json({ error: 'valid email required' });
+  }
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'message required' });
+  }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return res.status(503).json({ error: 'database unavailable' });
+  }
+  const { createClient } = require('@supabase/supabase-js');
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  const { error } = await supabase.from('player_last_comment').upsert({
+    player_id: player_email,
+    player_name: (player_name || 'UNKNOWN').trim().substring(0, 20),
+    player_email,
+    player_color: player_color || null,
+    message: message.trim().substring(0, 200),
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'player_id' });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 
 app.get('/api/rooms', (req, res) => {
