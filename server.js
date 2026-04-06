@@ -2072,13 +2072,18 @@ app.get('/api/leaderboard', async (req, res) => {
   const { createClient } = require('@supabase/supabase-js');
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
   // Fetch rank=1 finishes ordered by time, then deduplicate by email server-side
-  const { data, error } = await supabase
-    .from('race_results')
-    .select('player_name, player_email, finish_time_seconds')
-    .eq('rank', 1)
-    .not('finish_time_seconds', 'is', null)
-    .order('finish_time_seconds', { ascending: true })
-    .limit(200);
+  const [{ data, error }, { count, error: countError }] = await Promise.all([
+    supabase
+      .from('race_results')
+      .select('player_name, player_email, finish_time_seconds')
+      .eq('rank', 1)
+      .not('finish_time_seconds', 'is', null)
+      .order('finish_time_seconds', { ascending: true })
+      .limit(200),
+    supabase
+      .from('race_results')
+      .select('*', { count: 'exact', head: true })
+  ]);
   if (error) return res.status(500).json({ error: error.message });
 
   // Keep only the best time per email
@@ -2092,7 +2097,44 @@ app.get('/api/leaderboard', async (req, res) => {
       if (best.length >= 10) break;
     }
   }
-  res.json(best);
+  res.json({ rows: best, total: countError ? null : count });
+});
+
+app.get('/api/my-rank', async (req, res) => {
+  const email = (req.query.email || '').trim();
+  const name = (req.query.name || '').trim();
+  if (!email && !name) return res.status(400).json({ error: 'email or name required' });
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return res.json({ rank: null });
+
+  const { createClient } = require('@supabase/supabase-js');
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
+  // Find the player's best finish time (rank=1 results only)
+  let query = supabase.from('race_results').select('finish_time_seconds').eq('rank', 1).not('finish_time_seconds', 'is', null);
+  if (email) query = query.eq('player_email', email);
+  else query = query.eq('player_name', name);
+  query = query.order('finish_time_seconds', { ascending: true }).limit(1);
+  const { data: myData, error: myError } = await query;
+  if (myError) return res.status(500).json({ error: myError.message });
+  if (!myData || !myData.length) return res.json({ rank: null, bestTime: null });
+
+  const bestTime = myData[0].finish_time_seconds;
+  // Count how many distinct players have a better best time
+  const { data: betterData, error: betterError } = await supabase
+    .from('race_results')
+    .select('player_email, player_name, finish_time_seconds')
+    .eq('rank', 1)
+    .not('finish_time_seconds', 'is', null)
+    .lt('finish_time_seconds', bestTime);
+  if (betterError) return res.status(500).json({ error: betterError.message });
+
+  // Deduplicate by email/name to get distinct players
+  const seen = new Set();
+  for (const row of (betterData || [])) {
+    seen.add(row.player_email || row.player_name);
+  }
+  const rank = seen.size + 1;
+  res.json({ rank, bestTime });
 });
 
 app.get('/api/rooms', (req, res) => {

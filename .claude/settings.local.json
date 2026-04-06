@@ -3,7 +3,9 @@
     "allow": [
       "Bash(netstat -ano)",
       "Bash(findstr :3000)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ls /c/Users/nikla/Desktop/ascii-exe/.env*)",
+      "Bash(curl -s \"http://localhost:3000/api/my-rank?email=niklaswozlop@gmail.com\")"
     ]
   }
 }
