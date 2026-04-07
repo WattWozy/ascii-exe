@@ -773,7 +773,7 @@ const SERVER_EVENTS = [
   },
   {
     id: 'O2_DRAIN',
-    name: 'OXYGEN BLEED',
+    name: 'aliens gone mad!',
     description: 'Emergency: oxygen reserves compromised!',
     type: 'destructive',
     duration: 0,
@@ -784,6 +784,11 @@ const SERVER_EVENTS = [
           player.oxygen = Math.max(0, player.oxygen - Math.floor(player.maxOxygen * 0.3));
         }
       });
+      if (!room.targetAcquired) {
+        room.targetAcquired = true;
+        room._restartAlienTimer();
+        room.broadcast({ type: 'targetAcquiredChanged', active: true });
+      }
     },
     cleanup() { }
   },

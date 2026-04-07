@@ -528,7 +528,7 @@
       if (oxygenTextEl) oxygenTextEl.textContent = `${playerState.oxygen}/${maxOxygen}`;
 
       // State Menu
-      stateMenuEl.textContent = `dash: ${playerState.dash ? 'yes' : 'no'}  jumps: ${playerState.jumps}`;
+      stateMenuEl.textContent = `arrows: move  d: drag  x: bomb`;
 
       // Overlay
       updateOverlay();
